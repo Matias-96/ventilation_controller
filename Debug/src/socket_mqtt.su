@@ -1,0 +1,8 @@
+C:\Users\Matias\Documents\MCUXpressoIDE_11.5.1_7266\modbus_mqtt-master\lpc_chip_15xx\inc/core_cm3.h:1405:22:void NVIC_SetPriority(IRQn_Type, uint32_t)	16	static
+C:\Users\Matias\Documents\MCUXpressoIDE_11.5.1_7266\modbus_mqtt-master\lpc_chip_15xx\inc/core_cm3.h:1532:26:uint32_t SysTick_Config(uint32_t)	16	static
+C:\Users\Matias\Documents\MCUXpressoIDE_11.5.1_7266\modbus_mqtt-master\lpc_chip_15xx\inc/swm_15xx.h:232:20:void Chip_SWM_MovablePortPinAssign(CHIP_SWM_PIN_MOVABLE_T, uint8_t, uint8_t)	16	static
+../src/socket_mqtt.cpp:50:6:void SysTick_Handler()	4	static
+../src/socket_mqtt.cpp:56:10:uint32_t get_ticks()	4	static
+../src/socket_mqtt.cpp:64:6:void Sleep(int)	16	static
+../src/socket_mqtt.cpp:72:10:uint32_t millis()	4	static
+../src/socket_mqtt.cpp:82:5:int main()	744	static
