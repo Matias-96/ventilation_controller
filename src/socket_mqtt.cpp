@@ -30,10 +30,13 @@
 #include "MQTTClient.h"
 #include "DigitalIoPin.h"
 #include "LiquidCrystal.h"
+#include "SDP610.h"
+#include <string>
+#include <string.h>
 
 #define SSID	    ""
 #define PASSWORD    ""
-#define BROKER_IP   ""
+#define BROKER_IP   "192.168.1.101"
 #define BROKER_PORT  1883
 
 // TODO: insert other definitions and declarations here
@@ -77,6 +80,7 @@ void abbModbusTest();
 void socketTest();
 void mqttTest();
 void produalModbusTest();
+void messageArrived(MessageData* data);
 
 #if 1
 int main(void) {
@@ -146,12 +150,77 @@ int main(void) {
 
 	// printing co2 measurements -- Matias
 
-	//AO1.write(500); // fan speed at 50%
+	AO1.write(0); // fan speed at 50%
+
+	SDP610 pressure_sensor(LPC_I2C0);
+	int i2c_error = 0;
+
+	/* connect to mqtt broker, subscribe to a topic, send and receive messages regularly every 1 sec */
+	MQTTClient client;
+	Network network;
+	unsigned char sendbuf[256], readbuf[2556];
+	int rc = 0, count = 0;
+	MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
+
+	NetworkInit(&network,SSID,PASSWORD);
+	MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
+
+	char* address = (char *)BROKER_IP;
+	if ((rc = NetworkConnect(&network, address, BROKER_PORT)) != 0)
+		printf("Return code from network connect is %d\n", rc);
+
+
+	connectData.MQTTVersion = 3;
+	connectData.clientID.cstring = (char *)"esp_test";
+
+	if ((rc = MQTTConnect(&client, &connectData)) != 0)
+		printf("Return code from MQTT connect is %d\n", rc);
+	else
+		printf("MQTT Connected\n");
+
+	if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived)) != 0)
+		printf("Return code from MQTT subscribe is %d\n", rc);
+	int pressure = 0;
+	while (true)
+	{
+		Sleep(2000);
+		//printf("CO2 reading: %d ppm\n", CO2.read()); // returns -1 if read is unsuccessful
+		//printf("CO2 status: %d\n", CO2status.read()); // 0 - status OK
+		//pressure = pressure_sensor.read(i2c_error);
+		//if(i2c_error){
+		//	printf("I2C Error occurred\r\n");
+		//	break;
+		//}
+		MQTTMessage message;
+		char payload[30];
+
+		++count;
+
+		message.qos = QOS1;
+		message.retained = 0;
+		message.payload = payload;
+		sprintf(payload, "counter %d", count);
+		message.payloadlen = strlen(payload);
+
+		if ((rc = MQTTPublish(&client, "controller/status", &message)) != 0)
+			printf("Return code from MQTT publish is %d\n", rc);
+
+
+		if(rc != 0) {
+			NetworkDisconnect(&network);
+			// we should re-establish connection!!
+			break;
+		}
+
+		// run MQTT for 100 ms
+		if ((rc = MQTTYield(&client, 100)) != 0)
+			printf("Return code from yield is %d\n", rc);
+	}
+
+	printf("MQTT connection closed!\n");
 
 	while (1) {
-		Sleep(2000);
-		printf("CO2 reading: %d ppm\n", CO2.read()); // returns -1 if read is unsuccessful
-		printf("CO2 status: %d\n", CO2status.read()); // 0 - status OK
+
 	}
 
 	return 0;
@@ -191,12 +260,45 @@ void socketTest()
 }
 #endif
 
-#if 0
+#if 1
 
 void messageArrived(MessageData* data)
 {
 	printf("Message arrived on topic %.*s: %.*s\n", data->topicName->lenstring.len, data->topicName->lenstring.data,
 			data->message->payloadlen, (char *)data->message->payload);
+	std::string input((char *)data->message->payload, data->message->payloadlen);
+	size_t comma_pos = input.find(",", 0);
+	std::string mode = input.substr(0, comma_pos);
+	std::string value = input.substr(comma_pos+1, input.length() - comma_pos - 2);
+
+	if(mode.find("auto", 0)){
+		if(mode.find("true", 0) != std::string::npos){
+			printf("Value is true\r\n");
+		}
+		else if(mode.find("false", 0) != std::string::npos) {
+			printf("Value is false\r\n");
+		}
+		else {
+			printf("Value is invalid\r\n");
+		}
+	}
+	else {
+		printf("Invalid input\r\n");
+	}
+
+	size_t colon_pos = value.find(":", 0);
+	int reading;
+	if(value.find("pressure") != std::string::npos){
+		reading = std::stoi(value.substr(colon_pos+1, std::string::npos));
+		printf("Pressure input: %d\r\n", reading);
+	}
+	else if(value.find("speed") != std::string::npos){
+		reading = std::stoi(value.substr(colon_pos+1, std::string::npos));
+		printf("Speed input: %d\r\n", reading);
+	}
+	else {
+		printf("Value is invalid\r\n");
+	}
 }
 
 void mqttTest()
@@ -225,7 +327,7 @@ void mqttTest()
 	else
 		printf("MQTT Connected\n");
 
-	if ((rc = MQTTSubscribe(&client, "test/sample/#", QOS2, messageArrived)) != 0)
+	if ((rc = MQTTSubscribe(&client, "test/sample", QOS2, messageArrived)) != 0)
 		printf("Return code from MQTT subscribe is %d\n", rc);
 
 	uint32_t sec = 0;
@@ -245,7 +347,7 @@ void mqttTest()
 			sprintf(payload, "message number %d", count);
 			message.payloadlen = strlen(payload);
 
-			if ((rc = MQTTPublish(&client, "test/sample/a", &message)) != 0)
+			if ((rc = MQTTPublish(&client, "controller/status", &message)) != 0)
 				printf("Return code from MQTT publish is %d\n", rc);
 		}
 

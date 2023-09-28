@@ -13,6 +13,8 @@ RM := rm -rf
 -include src/mqtt/subdir.mk
 -include src/modbus/subdir.mk
 -include src/subdir.mk
+-include objects.mk
+
 ifneq ($(MAKECMDGOALS),clean)
 ifneq ($(strip $(C++_DEPS)),)
 -include $(C++_DEPS)
@@ -57,10 +59,10 @@ all:
 main-build: socket_mqtt.axf
 
 # Tool invocations
-socket_mqtt.axf: $(OBJS) $(USER_OBJS) makefile $(OPTIONAL_TOOL_DEPS)
+socket_mqtt.axf: $(OBJS) $(USER_OBJS) makefile objects.mk $(OPTIONAL_TOOL_DEPS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: MCU C++ Linker'
-	arm-none-eabi-c++ -nostdlib -L"C:\Users\Matias\Documents\MCUXpressoIDE_11.5.1_7266\modbus_mqtt-master\lpc_board_nxp_lpcxpresso_1549\Debug" -L"C:\Users\Matias\Documents\MCUXpressoIDE_11.5.1_7266\modbus_mqtt-master\lpc_chip_15xx\Debug" -Xlinker -Map="socket_mqtt.map" -Xlinker --cref -Xlinker --gc-sections -Xlinker -print-memory-usage -mcpu=cortex-m3 -mthumb -T socket_mqtt_Debug.ld -o "socket_mqtt.axf" $(OBJS) $(USER_OBJS) $(LIBS) -llpc_board_nxp_lpcxpresso_1549 -llpc_chip_15xx
+	arm-none-eabi-c++ -nostdlib -L"C:\Users\jpj1\amk-opiskelu\3_vuosi\embedded_systems_programming\workspace\lpc_board_nxp_lpcxpresso_1549\Debug" -L"C:\Users\jpj1\amk-opiskelu\3_vuosi\embedded_systems_programming\workspace\lpc_chip_15xx\Debug" -Xlinker -Map="socket_mqtt.map" -Xlinker --cref -Xlinker --gc-sections -Xlinker -print-memory-usage -mcpu=cortex-m3 -mthumb -T socket_mqtt_Debug.ld -o "socket_mqtt.axf" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

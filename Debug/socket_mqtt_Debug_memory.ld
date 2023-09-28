@@ -1,11 +1,12 @@
 /*
  * GENERATED FILE - DO NOT EDIT
- * Copyright 2008-2013 Code Red Technologies Ltd,
- * Copyright 2013-2023 NXP
+ * Copyright (c) 2008-2013 Code Red Technologies Ltd,
+ * Copyright 2015, 2018-2019 NXP
+ * (c) NXP Semiconductors 2013-2023
  * Generated linker script file for LPC1549
  * Created from memory.ldt by FMCreateLinkMemory
  * Using Freemarker v2.3.30
- * MCUXpresso IDE v11.8.0 [Build 1165] [2023-07-26] on 24.9.2023 klo 21.47.24
+ * MCUXpresso IDE v11.6.0 [Build 8187] [2022-07-13] on Sep 27, 2023, 7:13:03 PM
  */
 
 MEMORY

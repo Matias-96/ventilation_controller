@@ -1,0 +1,8 @@
+C:\Users\jpj1\amk-opiskelu\3_vuosi\embedded_systems_programming\workspace\lpc_chip_15xx\inc/iocon_15xx.h:95:20:void Chip_IOCON_PinMuxSet(LPC_IOCON_T*, uint8_t, uint8_t, uint32_t)	24	static
+C:\Users\jpj1\amk-opiskelu\3_vuosi\embedded_systems_programming\workspace\lpc_chip_15xx\inc/i2c_common_15xx.h:238:20:void Chip_I2C_SetClockDiv(LPC_I2C_T*, uint32_t)	16	static
+C:\Users\jpj1\amk-opiskelu\3_vuosi\embedded_systems_programming\workspace\lpc_chip_15xx\inc/i2cm_15xx.h:126:20:void Chip_I2CM_Enable(LPC_I2C_T*)	16	static
+../src/SDP610.cpp:15:1:SDP610::SDP610(LPC_I2C_T*, int, int, int, int, int, uint8_t)	24	static
+../src/SDP610.cpp:47:6:void SDP610::SetupXferRecAndExecute(uint8_t*, uint16_t, uint8_t*, uint16_t)	24	static
+../src/SDP610.cpp:63:5:int SDP610::read(int&)	40	static
+../src/SDP610.cpp:87:6:void SDP610::soft_reset(int&)	24	static
+../src/SDP610.cpp:102:6:void SDP610::set_altitude(int)	16	static

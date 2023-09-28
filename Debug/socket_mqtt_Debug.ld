@@ -1,11 +1,12 @@
 /*
  * GENERATED FILE - DO NOT EDIT
- * Copyright 2008-2013 Code Red Technologies Ltd,
- * Copyright 2013-2023 NXP
+ * Copyright (c) 2008-2013 Code Red Technologies Ltd,
+ * Copyright 2015, 2018-2019 NXP
+ * (c) NXP Semiconductors 2013-2023
  * Generated linker script file for LPC1549
  * Created from linkscript.ldt by FMCreateLinkLibraries
  * Using Freemarker v2.3.30
- * MCUXpresso IDE v11.8.0 [Build 1165] [2023-07-26] on 24.9.2023 klo 21.47.24
+ * MCUXpresso IDE v11.6.0 [Build 8187] [2022-07-13] on Sep 27, 2023, 7:13:03 PM
  */
 
 INCLUDE "socket_mqtt_Debug_library.ld"
@@ -77,6 +78,7 @@ SECTIONS
             . = ALIGN(4);
             /* End C++ */
     } > MFlash256
+
     /*
      * for exception handling/unwind - some Newlib functions (in common
      * with C++ and STDC++) use this.
@@ -142,7 +144,7 @@ SECTIONS
     } > Ram0_16_32 AT>MFlash256
 
     /* BSS section for Ram2_4 */
-    .bss_RAM2 (NOLOAD) : ALIGN(4)
+    .bss_RAM2 : ALIGN(4)
     {
        PROVIDE(__start_bss_RAM2 = .) ;
        PROVIDE(__start_bss_Ram2_4 = .) ;
@@ -156,7 +158,7 @@ SECTIONS
     } > Ram2_4 AT> Ram2_4
 
     /* MAIN BSS SECTION */
-    .bss (NOLOAD) : ALIGN(4)
+    .bss : ALIGN(4)
     {
         _bss = .;
         PROVIDE(__start_bss_RAM = .) ;
