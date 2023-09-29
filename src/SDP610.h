@@ -20,8 +20,8 @@ public:
 			int _scd_pin = 23,
 			int altitude = 0,
 			uint8_t _address = 64);
-	int read(int &status);
-	void soft_reset(int &status);
+	int read(int &i2c_error);
+	void soft_reset(int &i2c_error);
 	void set_altitude(int altitude);
 
 
@@ -37,6 +37,7 @@ private:
 	/* Standard I2C mode */
 	static const int I2C_MODE = 0;
 	static const int SCALE_FACTOR = 240;
+	static const int MAX_PRESSURE_Pa = 125;
 	void SetupXferRecAndExecute(uint8_t *txBuffPtr,
 							    uint16_t txSize,
 							    uint8_t *rxBuffPtr,

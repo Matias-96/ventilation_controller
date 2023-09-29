@@ -60,9 +60,9 @@ void SDP610::SetupXferRecAndExecute(uint8_t *txBuffPtr,
 	Chip_I2CM_XferBlocking(i2c, &i2cmXferRec);
 }
 
-int SDP610::read(int &status) {
+int SDP610::read(int &i2c_error) {
 	if(i2c == nullptr){
-		status = -1;
+		i2c_error = -1;
 		return 0;
 	}
 
@@ -80,22 +80,22 @@ int SDP610::read(int &status) {
 				read_data[0], read_data[1], sensor_output, pressure);
 	}
 
-	status = i2cmXferRec.status;
+	i2c_error = i2cmXferRec.status;
 	return pressure;
 }
 
-void SDP610::soft_reset(int &status){
+void SDP610::soft_reset(int &i2c_error){
 	if(i2c == nullptr){
-		status = -1;
+		i2c_error = -1;
 		return;
 	}
 	SetupXferRecAndExecute(&SOFT_RESET, 1, nullptr, 0);
-	status = i2cmXferRec.status;
+	i2c_error = i2cmXferRec.status;
 	// After reset, do one dummy read because sensor's first
 	//measurement after reset is not valid
 	if(i2cmXferRec.status == I2CM_STATUS_OK){
 		//Sleep(10);
-		read(status);
+		read(i2c_error);
 	}
 }
 

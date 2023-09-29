@@ -33,6 +33,8 @@
 #include "SDP610.h"
 #include <string>
 #include <string.h>
+//#include "VentilationSystem.h"
+//#include "VentilationFan.h"
 
 #define SSID	    ""
 #define PASSWORD    ""
@@ -137,6 +139,8 @@ int main(void) {
 	ModbusMaster fanNode(1); // slave address of 1
 	ModbusMaster co2Node(240); // slave address of 240
 
+	ModbusMaster temp(241); // slave address of 240
+
 	fanNode.begin(9600);
 	co2Node.begin(9600);
 
@@ -148,14 +152,17 @@ int main(void) {
 	ModbusRegister CO2(&co2Node, 256, false); // 257 - measured co2 value
 	ModbusRegister CO2status(&co2Node, 2049, false); // 0 if ok
 
+	ModbusRegister temp_register(&temp, 257, false); // 0 if ok
+
 	// printing co2 measurements -- Matias
 
-	AO1.write(0); // fan speed at 50%
+	//AO1.write(0); // fan speed at 50%
 
-	SDP610 pressure_sensor(LPC_I2C0);
-	int i2c_error = 0;
+	//SDP610 pressure_sensor(LPC_I2C0);
+	//int i2c_error = 0;
 
 	/* connect to mqtt broker, subscribe to a topic, send and receive messages regularly every 1 sec */
+	/*
 	MQTTClient client;
 	Network network;
 	unsigned char sendbuf[256], readbuf[2556];
@@ -181,16 +188,18 @@ int main(void) {
 	if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived)) != 0)
 		printf("Return code from MQTT subscribe is %d\n", rc);
 	int pressure = 0;
+*/
 	while (true)
 	{
 		Sleep(2000);
-		//printf("CO2 reading: %d ppm\n", CO2.read()); // returns -1 if read is unsuccessful
+		printf("Temp reading: %d ppm\n", temp_register.read()); // returns -1 if read is unsuccessful
 		//printf("CO2 status: %d\n", CO2status.read()); // 0 - status OK
 		//pressure = pressure_sensor.read(i2c_error);
 		//if(i2c_error){
 		//	printf("I2C Error occurred\r\n");
 		//	break;
 		//}
+		/*
 		MQTTMessage message;
 		char payload[30];
 
@@ -215,6 +224,8 @@ int main(void) {
 		// run MQTT for 100 ms
 		if ((rc = MQTTYield(&client, 100)) != 0)
 			printf("Return code from yield is %d\n", rc);
+
+		*/
 	}
 
 	printf("MQTT connection closed!\n");

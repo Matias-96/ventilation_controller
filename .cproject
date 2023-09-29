@@ -286,7 +286,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="paho.mqtt.embedded-c/MQTTClient-C/src/FreeRTOS|paho.mqtt.embedded-c/MQTTClient-C/src/cc3200|paho.mqtt.embedded-c/MQTTClient-C/src/linux|paho.mqtt.embedded-c/MQTTPacket/samples|paho.mqtt.embedded-c/MQTTClient-C/test|paho.mqtt.embedded-c/MQTTClient-C/samples|paho.mqtt.embedded-c/doc|paho.mqtt.embedded-c/MQTTPacket/test|paho.mqtt.embedded-c/Debug|paho.mqtt.embedded-c/test|paho.mqtt.embedded-c/MQTTClient|retarget_itm.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
+						<entry excluding="VentilationSystem.cpp|paho.mqtt.embedded-c/MQTTClient-C/src/FreeRTOS|paho.mqtt.embedded-c/MQTTClient-C/src/cc3200|paho.mqtt.embedded-c/MQTTClient-C/src/linux|paho.mqtt.embedded-c/MQTTPacket/samples|paho.mqtt.embedded-c/MQTTClient-C/test|paho.mqtt.embedded-c/MQTTClient-C/samples|paho.mqtt.embedded-c/doc|paho.mqtt.embedded-c/MQTTPacket/test|paho.mqtt.embedded-c/Debug|paho.mqtt.embedded-c/test|paho.mqtt.embedded-c/MQTTClient|retarget_itm.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -615,7 +615,14 @@
 	</storageModule>
 	<storageModule moduleId="com.crt.advproject"/>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
-	<storageModule moduleId="refreshScope"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Debug">
+			<resource resourceType="PROJECT" workspacePath="/socket_mqtt"/>
+		</configuration>
+		<configuration configurationName="Release">
+			<resource resourceType="PROJECT" workspacePath="/socket_mqtt"/>
+		</configuration>
+	</storageModule>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 		<scannerConfigBuildInfo instanceId="com.crt.advproject.config.exe.debug.364393943;com.crt.advproject.config.exe.debug.364393943.;com.crt.advproject.cpp.exe.debug.626753647;com.crt.advproject.compiler.cpp.input.1639827383">
