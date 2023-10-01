@@ -33,8 +33,9 @@
 #include "SDP610.h"
 #include <string>
 #include <string.h>
-//#include "VentilationSystem.h"
-//#include "VentilationFan.h"
+#include "VentilationSystem.h"
+#include "VentilationFan.h"
+#include <algorithm>
 
 #define SSID	    ""
 #define PASSWORD    ""
@@ -43,7 +44,9 @@
 
 // TODO: insert other definitions and declarations here
 static volatile int counter;
-static volatile uint32_t systicks;
+static volatile uint32_t systicks = 0;
+
+VentilationSystem *s;
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,6 +57,7 @@ extern "C" {
  */
 void SysTick_Handler(void) {
 	systicks++;
+	if(s != nullptr) s->tick();
 	if (counter > 0)
 		counter--;
 }
@@ -158,11 +162,11 @@ int main(void) {
 
 	//AO1.write(0); // fan speed at 50%
 
-	//SDP610 pressure_sensor(LPC_I2C0);
+	SDP610 pressure_sensor(LPC_I2C0);
 	//int i2c_error = 0;
 
 	/* connect to mqtt broker, subscribe to a topic, send and receive messages regularly every 1 sec */
-	/*
+
 	MQTTClient client;
 	Network network;
 	unsigned char sendbuf[256], readbuf[2556];
@@ -170,7 +174,7 @@ int main(void) {
 	MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
 
 	NetworkInit(&network,SSID,PASSWORD);
-	MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
+	MQTTClientInit(&client, &network, 5000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
 
 	char* address = (char *)BROKER_IP;
 	if ((rc = NetworkConnect(&network, address, BROKER_PORT)) != 0)
@@ -180,52 +184,97 @@ int main(void) {
 	connectData.MQTTVersion = 3;
 	connectData.clientID.cstring = (char *)"esp_test";
 
-	if ((rc = MQTTConnect(&client, &connectData)) != 0)
+	bool mqtt_connected;
+
+	if ((rc = MQTTConnect(&client, &connectData)) != 0){
 		printf("Return code from MQTT connect is %d\n", rc);
-	else
+		mqtt_connected = false;
+	}
+
+	else{
 		printf("MQTT Connected\n");
+		mqtt_connected = true;
+	}
+
 
 	if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived)) != 0)
 		printf("Return code from MQTT subscribe is %d\n", rc);
-	int pressure = 0;
-*/
+
+	VentilationFan fan(&AO1, &AO1, 0, false);
+
+	VentilationSystem system(&fan, &pressure_sensor, false, 0);
+
+	s = &system;
+	uint32_t sec_20 = 0;
+	uint32_t sec_5 = 0;
+	uint32_t sec_2 = 0;
+
 	while (true)
 	{
-		Sleep(2000);
-		printf("Temp reading: %d ppm\n", temp_register.read()); // returns -1 if read is unsuccessful
+		//Sleep(1000);
+		//printf("Temp reading: %d ppm\n", temp_register.read()); // returns -1 if read is unsuccessful
 		//printf("CO2 status: %d\n", CO2status.read()); // 0 - status OK
 		//pressure = pressure_sensor.read(i2c_error);
 		//if(i2c_error){
 		//	printf("I2C Error occurred\r\n");
 		//	break;
 		//}
-		/*
-		MQTTMessage message;
-		char payload[30];
+		if(get_ticks() / 2000 != sec_2){
+			sec_2 = get_ticks() / 2000;
+			system.adjust();
+		}
 
-		++count;
+		if(mqtt_connected && get_ticks() / 5000 != sec_5){
+			sec_5 = get_ticks() / 5000;
+			MQTTMessage message;
+			char payload[150];
 
-		message.qos = QOS1;
-		message.retained = 0;
-		message.payload = payload;
-		sprintf(payload, "counter %d", count);
-		message.payloadlen = strlen(payload);
+			++count;
 
-		if ((rc = MQTTPublish(&client, "controller/status", &message)) != 0)
-			printf("Return code from MQTT publish is %d\n", rc);
+			message.qos = QOS1;
+			message.retained = 0;
+			message.payload = payload;
+			sprintf(payload, "{\"nr\":%d, \"speed\":%d, \"setpoint\":%d, \"pressure\":%d, \"auto\":%s, \"error\":%s, \"co2\":300, \"rh\":37, \"temp\":20 }",
+					count,
+					system.get_speed(),
+					system.get_target_pressure(),
+					system.get_pressure(),
+					system.get_mode() ? "false" : "true",
+					system.error() ? "true" : "false");
+			message.payloadlen = strlen(payload);
 
+			if ((rc = MQTTPublish(&client, "controller/status", &message)) != 0){
+				printf("Return code from MQTT publish is %d\n", rc);
+				mqtt_connected = false;
+			}
+		}
 
-		if(rc != 0) {
-			NetworkDisconnect(&network);
+		// Try to reconnect every 20 seconds
+		if(!mqtt_connected && get_ticks() / 20000 != sec_20) {
+			printf("trying to reconnect to MQTT\n");
+			sec_20 = get_ticks() / 20000;
+			//NetworkDisconnect(&network);
 			// we should re-establish connection!!
-			break;
+			if ((rc = MQTTConnect(&client, &connectData)) != 0){
+				printf("Return code from MQTT connect is %d\n", rc);
+			}
+			else{
+				printf("MQTT Connected\n");
+				mqtt_connected = true;
+				if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived)) != 0)
+						printf("Return code from MQTT subscribe is %d\n", rc);
+			}
+
+			//break;
 		}
 
 		// run MQTT for 100 ms
 		if ((rc = MQTTYield(&client, 100)) != 0)
 			printf("Return code from yield is %d\n", rc);
 
-		*/
+
+
+
 	}
 
 	printf("MQTT connection closed!\n");
@@ -275,30 +324,49 @@ void socketTest()
 
 void messageArrived(MessageData* data)
 {
-	printf("Message arrived on topic %.*s: %.*s\n", data->topicName->lenstring.len, data->topicName->lenstring.data,
-			data->message->payloadlen, (char *)data->message->payload);
+	//printf("Message arrived on topic %.*s: %.*s\n", data->topicName->lenstring.len, data->topicName->lenstring.data,
+	//		data->message->payloadlen, (char *)data->message->payload);
 	std::string input((char *)data->message->payload, data->message->payloadlen);
-	size_t comma_pos = input.find(",", 0);
-	std::string mode = input.substr(0, comma_pos);
-	std::string value = input.substr(comma_pos+1, input.length() - comma_pos - 2);
+	// Remove unwanted characters from input
+	input.erase(remove(input.begin(), input.end(), ' '), input.end());
+	input.erase(remove(input.begin(), input.end(), '"'), input.end());
+	input.erase(remove(input.begin(), input.end(), '{'), input.end());
+	input.erase(remove(input.begin(), input.end(), '}'), input.end());
 
-	if(mode.find("auto", 0)){
-		if(mode.find("true", 0) != std::string::npos){
-			printf("Value is true\r\n");
+
+	size_t separator_position = input.find(",");
+	if(separator_position == std::string::npos){
+		// Invalid msg
+		// TODO Set active error.
+		return;
+	}
+	std::string mode = input.substr(0, separator_position);
+	std::string value = input.substr(separator_position+1, input.length() - separator_position - 1);
+	bool auto_mode = false;
+
+	if(mode.find("auto") == 0){
+		if(mode.find("true") != std::string::npos){
+			auto_mode = true;
+			printf("Mode: auto\n");
 		}
-		else if(mode.find("false", 0) != std::string::npos) {
-			printf("Value is false\r\n");
+		else if(mode.find("false") != std::string::npos) {
+			auto_mode = false;
+			printf("Mode: manual\n");
 		}
 		else {
 			printf("Value is invalid\r\n");
+			// TODO Set active error.
+			return;
 		}
 	}
 	else {
 		printf("Invalid input\r\n");
+		// TODO Set active error.
+		return;
 	}
 
 	size_t colon_pos = value.find(":", 0);
-	int reading;
+	int reading = 0;
 	if(value.find("pressure") != std::string::npos){
 		reading = std::stoi(value.substr(colon_pos+1, std::string::npos));
 		printf("Pressure input: %d\r\n", reading);
@@ -309,7 +377,19 @@ void messageArrived(MessageData* data)
 	}
 	else {
 		printf("Value is invalid\r\n");
+		// TODO Set active error.
+		return;
 	}
+
+	s->set_mode(auto_mode);
+	if(auto_mode){
+		s->set_target_pressure(reading);
+	}
+	else {
+		s->set_speed(reading);
+	}
+
+
 }
 
 void mqttTest()

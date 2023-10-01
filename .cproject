@@ -286,7 +286,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="VentilationSystem.cpp|paho.mqtt.embedded-c/MQTTClient-C/src/FreeRTOS|paho.mqtt.embedded-c/MQTTClient-C/src/cc3200|paho.mqtt.embedded-c/MQTTClient-C/src/linux|paho.mqtt.embedded-c/MQTTPacket/samples|paho.mqtt.embedded-c/MQTTClient-C/test|paho.mqtt.embedded-c/MQTTClient-C/samples|paho.mqtt.embedded-c/doc|paho.mqtt.embedded-c/MQTTPacket/test|paho.mqtt.embedded-c/Debug|paho.mqtt.embedded-c/test|paho.mqtt.embedded-c/MQTTClient|retarget_itm.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
+						<entry excluding="paho.mqtt.embedded-c/MQTTClient-C/src/FreeRTOS|paho.mqtt.embedded-c/MQTTClient-C/src/cc3200|paho.mqtt.embedded-c/MQTTClient-C/src/linux|paho.mqtt.embedded-c/MQTTPacket/samples|paho.mqtt.embedded-c/MQTTClient-C/test|paho.mqtt.embedded-c/MQTTClient-C/samples|paho.mqtt.embedded-c/doc|paho.mqtt.embedded-c/MQTTPacket/test|paho.mqtt.embedded-c/Debug|paho.mqtt.embedded-c/test|paho.mqtt.embedded-c/MQTTClient|retarget_itm.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

@@ -32,6 +32,6 @@ bool VentilationFan::readFan() {
 	}
 }
 
-void VentilationFan::setSpeed(int speed) {
-	motor->write(speed);
+void VentilationFan::setSpeed(float speed) {
+	motor->write(speed*10);
 }

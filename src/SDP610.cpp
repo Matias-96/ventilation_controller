@@ -76,8 +76,8 @@ int SDP610::read(int &i2c_error) {
 			sensor_output |= 0xFFFF0000;
 		}
 		pressure = (sensor_output / SCALE_FACTOR) * altitude_correction_factor;
-		printf("MSB: %3d, LSB: %3d, Sensor output: %5d, Pressure: %3d\n",
-				read_data[0], read_data[1], sensor_output, pressure);
+		//printf("MSB: %3d, LSB: %3d, Sensor output: %5d, Pressure: %3d\n",
+				//read_data[0], read_data[1], sensor_output, pressure);
 	}
 
 	i2c_error = i2cmXferRec.status;

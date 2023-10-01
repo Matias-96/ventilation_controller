@@ -13,6 +13,7 @@
 
 class SDP610 {
 public:
+	static const int MAX_PRESSURE_Pa = 125;
 	SDP610(LPC_I2C_T *i2c_peripheral,
 			int _scl_port = 0,
 			int _scl_pin = 22,
@@ -37,7 +38,6 @@ private:
 	/* Standard I2C mode */
 	static const int I2C_MODE = 0;
 	static const int SCALE_FACTOR = 240;
-	static const int MAX_PRESSURE_Pa = 125;
 	void SetupXferRecAndExecute(uint8_t *txBuffPtr,
 							    uint16_t txSize,
 							    uint8_t *rxBuffPtr,

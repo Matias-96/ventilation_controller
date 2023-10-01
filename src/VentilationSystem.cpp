@@ -7,19 +7,19 @@
 
 
 #include "VentilationSystem.h"
+#include <cmath>
 
 
 VentilationSystem::VentilationSystem(
 	VentilationFan *_fan,
 	SDP610 *_pressure_sensor,
-	MODE _mode,
-	int _fan_speed,
+	bool _auto_mode,
 	int _target_pressure) :
 		fan(_fan),
 		pressure_sensor(_pressure_sensor),
-		mode(_mode),
-		fan_speed(_fan_speed),
+		auto_mode(_auto_mode),
 		target_pressure(_target_pressure),
+		fan_speed(0),
 		error_codes(0),
 		counter(0)
 {
@@ -32,38 +32,54 @@ void VentilationSystem::tick(){
 }
 
 void VentilationSystem::adjust(){
-	if(mode == AUTO){
-		int i2c_error = 0;
-		int measured_pressure = pressure_sensor->read(i2c_error);
-		if(i2c_error){
-			set_error(ERROR::I2C_ERROR);
+	int i2c_error = 0;
+	int measured_pressure = pressure_sensor->read(i2c_error);
+	if(i2c_error){
+		set_error(ERROR::I2C_ERROR);
+	}
+	else {
+		unset_error(ERROR::I2C_ERROR);
+		pressure = measured_pressure;
+	}
+
+	if(auto_mode && !i2c_error){
+		if(measured_pressure >= target_pressure){
+			unset_error(ERROR::PRESSURE_NOT_REACHED);
+			counter = 0;
+		}
+		else if(counter >= time_to_reach_target_pressure){
+			set_error(ERROR::PRESSURE_NOT_REACHED);
+			counter = 0;
+		}
+
+		if(target_pressure > 0){
+			float diff = target_pressure - measured_pressure;
+			diff = diff / 2.0f;
+
+			if(target_pressure < 10 && fan_speed < 10){
+				fan_speed += 10;
+			}
+			fan_speed += diff;
+			if(fan_speed > 100.0){
+				fan_speed = 100.0;
+			}
+			else if(fan_speed < 0){
+				fan_speed = 0;
+			}
+			fan->setSpeed(fan_speed);
 		}
 		else {
-			unset_error(ERROR::I2C_ERROR);
-			pressure = measured_pressure;
-			if(measured_pressure >= target_pressure){
-				unset_error(ERROR::PRESSURE_NOT_REACHED);
-				counter = 0;
-			}
-			else if(counter >= time_to_reach_target_pressure){
-				set_error(ERROR::PRESSURE_NOT_REACHED);
-				counter = 0;
-			}
-
-			if(target_pressure > 0){
-				// Adjust fan speed
-			}
-			else {
-				// Set speed to 0
-			}
+			fan->setSpeed(0);
+			fan_speed = 0;
 		}
 	}
 	else {
-		// set fan speed
+		fan->setSpeed(fan_speed);
 	}
 
 	// Check that fan is spinning and set error code if its not.
-	if(fan->spinning() || target_pressure <= 0){
+	// Also unset FAN_NOT_SPINNING error if target_pressure is 0 since fan is not supposed to spin then.
+	if(fan->readFan() || target_pressure <= 0){
 		unset_error(ERROR::FAN_NOT_SPINNING);
 	}
 	else {
@@ -73,15 +89,19 @@ void VentilationSystem::adjust(){
 
 }
 
-void VentilationSystem::set_mode(MODE mode){
-	this->mode = mode;
+void VentilationSystem::set_mode(bool mode){
+	this->auto_mode = mode;
+	counter = 0;
+	if(!auto_mode){
+		unset_error(ERROR::PRESSURE_NOT_REACHED);
+	}
 }
 
 void VentilationSystem::set_speed(int speed){
-	if(fan_speed < 0){
+	if(speed < 0){
 		fan_speed = 0;
 	}
-	else if(fan_speed > 100){
+	else if(speed > 100){
 		fan_speed = 100;
 	}
 	else {
@@ -113,8 +133,12 @@ int VentilationSystem::get_speed() const{
 	return fan_speed;
 }
 
-MODE VentilationSystem::get_mode() const {
-	return mode;
+int VentilationSystem::get_target_pressure() const {
+	return target_pressure;
+}
+
+bool VentilationSystem::get_mode() const {
+	return auto_mode;
 }
 
 void VentilationSystem::set_error(ERROR error){
