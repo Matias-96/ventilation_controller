@@ -37,9 +37,9 @@
 #include "VentilationFan.h"
 #include <algorithm>
 
-#define SSID	    ""
-#define PASSWORD    ""
-#define BROKER_IP   "192.168.1.101"
+#define SSID	    "SmartIotMQTT"
+#define PASSWORD    "SmartIot"
+#define BROKER_IP   "192.168.1.106"
 #define BROKER_PORT  1883
 
 // TODO: insert other definitions and declarations here
@@ -93,6 +93,9 @@ int main(void) {
 
 #if defined (__USE_LPCOPEN)
 	// Read clock settings and update SystemCoreClock variable
+
+
+
 	SystemCoreClockUpdate();
 #if !defined(NO_BOARD_LIB)
 	// Set up and initialize all required blocks and
@@ -174,7 +177,7 @@ int main(void) {
 	MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
 
 	NetworkInit(&network,SSID,PASSWORD);
-	MQTTClientInit(&client, &network, 5000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
+	MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
 
 	char* address = (char *)BROKER_IP;
 	if ((rc = NetworkConnect(&network, address, BROKER_PORT)) != 0)
@@ -224,8 +227,8 @@ int main(void) {
 			system.adjust();
 		}
 
-		if(mqtt_connected && get_ticks() / 5000 != sec_5){
-			sec_5 = get_ticks() / 5000;
+		if(mqtt_connected && get_ticks() / 2000 != sec_5){
+			sec_5 = get_ticks() / 2000;
 			MQTTMessage message;
 			char payload[150];
 
@@ -234,12 +237,12 @@ int main(void) {
 			message.qos = QOS1;
 			message.retained = 0;
 			message.payload = payload;
-			sprintf(payload, "{\"nr\":%d, \"speed\":%d, \"setpoint\":%d, \"pressure\":%d, \"auto\":%s, \"error\":%s, \"co2\":300, \"rh\":37, \"temp\":20 }",
+			sprintf(payload, "{\"nr\":%4d, \"speed\":%3d, \"setpoint\":%3d, \"pressure\":%3d, \"auto\":%5s, \"error\":%5s, \"co2\":300, \"rh\":37, \"temp\":20 }",
 					count,
 					system.get_speed(),
-					system.get_target_pressure(),
+					system.get_mode() ? system.get_target_pressure() : system.get_speed(),
 					system.get_pressure(),
-					system.get_mode() ? "false" : "true",
+					system.get_mode() ? "true" : "false",
 					system.error() ? "true" : "false");
 			message.payloadlen = strlen(payload);
 

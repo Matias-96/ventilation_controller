@@ -53,13 +53,24 @@ void VentilationSystem::adjust(){
 		}
 
 		if(target_pressure > 0){
-			float diff = target_pressure - measured_pressure;
-			diff = diff / 2.0f;
+			float KP = 0.25;
+			float KI = 0.09;
+			float KD = 0.1;
+			//float diff = target_pressure - measured_pressure;
+			float error = target_pressure - measured_pressure;
+			float integral = last_integral + error * 2;
+			float derivative = (error - last_error) / 2;
+			float output = KP*error + KI*integral + KD*derivative;
+			last_error = error;
+			last_integral = integral;
+			fan_speed = output;
 
-			if(target_pressure < 10 && fan_speed < 10){
-				fan_speed += 10;
-			}
-			fan_speed += diff;
+			//diff = diff / 2.0f;
+
+			//if(target_pressure < 10 && fan_speed < 10){
+			//	fan_speed += 10;
+			//}
+			//fan_speed += diff;
 			if(fan_speed > 100.0){
 				fan_speed = 100.0;
 			}
@@ -77,16 +88,17 @@ void VentilationSystem::adjust(){
 		fan->setSpeed(fan_speed);
 	}
 
-	// Check that fan is spinning and set error code if its not.
-	// Also unset FAN_NOT_SPINNING error if target_pressure is 0 since fan is not supposed to spin then.
-	if(fan->readFan() || target_pressure <= 0){
+	// In either of these conditions fan is supposed to spin
+	if(target_pressure > 0 || fan_speed > 0){
+		int new_fan_value = fan->readFan();
+		if(previous_fan_value == 0 && new_fan_value == 0)
+			set_error(ERROR::FAN_NOT_SPINNING);
+		else
+			unset_error(ERROR::FAN_NOT_SPINNING);
+		previous_fan_value = new_fan_value;
+	}
+	else
 		unset_error(ERROR::FAN_NOT_SPINNING);
-	}
-	else {
-		set_error(ERROR::FAN_NOT_SPINNING);
-	}
-
-
 }
 
 void VentilationSystem::set_mode(bool mode){

@@ -46,6 +46,10 @@ private:
 	uint8_t error_codes;
 	volatile int counter;
 
+	float last_error = 0;
+	float last_integral = 0;
+	int previous_fan_value = 0;
+
 
 	void set_error(ERROR error);
 	void unset_error(ERROR error);

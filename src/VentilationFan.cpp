@@ -7,6 +7,7 @@
 
 #include "ModbusRegister.h"
 #include "VentilationFan.h"
+#include <cstdio>
 
 VentilationFan::VentilationFan(ModbusRegister *readRegister,
 		ModbusRegister *writeRegister, int speed = 0, bool spinning = false) :
@@ -20,7 +21,9 @@ VentilationFan::~VentilationFan() {
 // When read periodically if the value is zero after two reads it means that the
 // fan is stopped.
 
-bool VentilationFan::readFan() {
+int VentilationFan::readFan() {
+	//printf("Fan reading: %d\n", status->read());
+	return status->read();
 	if (status->read() == 0) { // delay needed?
 		if (status->read() == 0) {
 			return false;

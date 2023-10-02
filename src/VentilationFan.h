@@ -14,7 +14,7 @@ class VentilationFan {
 public:
 	VentilationFan(ModbusRegister *readRegister, ModbusRegister *writeRegister,int speed, bool spinning);
 	virtual ~VentilationFan();
-	bool readFan();
+	int readFan();
 	void setSpeed(float speed);
 private:
 	int speed;
