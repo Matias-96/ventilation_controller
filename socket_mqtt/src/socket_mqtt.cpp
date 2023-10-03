@@ -1,11 +1,11 @@
 /*
-===============================================================================
+ ===============================================================================
  Name        : main.c
  Author      : $(author)
  Version     :
  Copyright   : $(copyright)
  Description : main definition
-===============================================================================
+ ===============================================================================
  */
 
 #if defined (__USE_LPCOPEN)
@@ -20,6 +20,7 @@
 
 // TODO: insert other include files here
 #include <cstdio>
+#include "HumTempModbus.h"
 #include <cstring>
 #include "systick.h"
 #include "LpcUart.h"
@@ -31,14 +32,10 @@
 #include "DigitalIoPin.h"
 #include "LiquidCrystal.h"
 
-
-
-#define SSID	    "SmartIotMQTT"
+#define SSID        "SmartIotMQTT"
 #define PASSWORD    "SmartIot"
 #define BROKER_IP   "192.168.1.254"
 #define BROKER_PORT  1883
-
-
 
 // TODO: insert other definitions and declarations here
 static volatile int counter;
@@ -51,14 +48,13 @@ extern "C" {
  * @brief	Handle interrupt from SysTick timer
  * @return	Nothing
  */
-void SysTick_Handler(void)
-{
+void SysTick_Handler(void) {
 	systicks++;
-	if(counter > 0) counter--;
+	if (counter > 0)
+		counter--;
 }
 
-uint32_t get_ticks(void)
-{
+uint32_t get_ticks(void) {
 	return systicks;
 }
 
@@ -66,10 +62,9 @@ uint32_t get_ticks(void)
 }
 #endif
 
-void Sleep(int ms)
-{
+void Sleep(int ms) {
 	counter = ms;
-	while(counter > 0) {
+	while (counter > 0) {
 		__WFI();
 	}
 }
@@ -79,12 +74,10 @@ uint32_t millis() {
 	return systicks;
 }
 
-
 void abbModbusTest();
 void socketTest();
 void mqttTest();
 void produalModbusTest();
-
 
 #if 1
 int main(void) {
@@ -117,33 +110,65 @@ int main(void) {
 	DigitalIoPin *d6 = new DigitalIoPin(1, 3, DigitalIoPin::output);
 	DigitalIoPin *d7 = new DigitalIoPin(0, 0, DigitalIoPin::output);
 	LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
 	// configure display geometry
-	lcd.begin(16, 2);
+	//lcd.begin(16, 2);
 	// set the cursor to column 0, line 1
 	// (note: line 1 is the second row, since counting begins with 0):
-	lcd.setCursor(0, 0);
+	//lcd.setCursor(0, 0);
 	// Print a message to the LCD.
-	lcd.print(SSID);
-	lcd.setCursor(0, 1);
-	lcd.print(BROKER_IP);
+	//lcd.print(SSID);
+	//lcd.setCursor(0, 1);
+	//lcd.print(BROKER_IP);
 	//char tmp[8];
 	//sprintf(tmp, ":%d", BROKER_PORT);
 	//lcd.print(tmp);
 
-
 	//abbModbusTest();
 	//socketTest();
 	//mqttTest();
-	produalModbusTest();
+	//produalModbusTest();
 
+	// printing co2 measurements -- Matias
 
-	// Enter an infinite loop, just incrementing a counter
-	while(1) {
-		// "Dummy" NOP to allow source level single
-		// stepping of tight while() loop
-		__asm volatile ("nop");
+	HumTempModbus sensor;
+
+	ModbusMaster fanNode(1); // slave address of 1
+	ModbusMaster co2Node(240); // slave address of 240
+	//ModbusMaster humTempNode(241);
+
+	fanNode.begin(9600);
+	co2Node.begin(9600);
+	//humTempNode.begin(9600);
+
+	//notice the offset of -1 when defining the register number
+	//ModbusRegister::read() checks the next register over
+
+	ModbusRegister AO1(&fanNode, 0); // drive the motor
+	ModbusRegister DI1(&fanNode, 4, false); // set holding register to false if it's read only
+	ModbusRegister CO2(&co2Node, 256, false); // 257 - measured co2 value
+	ModbusRegister CO2status(&co2Node, 2049, false); // 0 if ok
+	//ModbusRegister HUM(&humTempNode, 256, false);
+	//ModbusRegister TEMP(&humTempNode, 257, false);
+	//ModbusRegister humTempStatus(&humTempNode, 512, false);
+
+	// printing co2 measurements -- Matias
+
+	//AO1.write(500); // fan speed at 50%
+
+	while (1) {
+		Sleep(2000);
+		printf("CO2 reading: %d ppm\n", CO2.read()); // returns -1 if read is unsuccessful
+		printf("CO2 status: %d\n", CO2status.read()); // 0 - status OK
+		//printf("Temp reading: %d \n", (TEMP.read()) / 10);
+		//printf("Humidity reading: %d \n", (HUM.read() / 10));
+		//printf("HumTemp status: %d\n", humTempStatus.read());
+        printf("Temperature: %d°C\n", sensor.getTemperature());
+        printf("Humidity: %d%%\n", sensor.getHumidity());
+        printf("Sensor Status: %d\n", sensor.getStatus());
 	}
-	return 0 ;
+
+	return 0;
 
 }
 #endif
@@ -254,7 +279,6 @@ void mqttTest()
 }
 #endif
 
-
 #if 0   // example that uses modbus library directly
 void printRegister(ModbusMaster& node, uint16_t reg)
 {
@@ -364,26 +388,24 @@ void abbModbusTest()
 }
 #endif
 
-
-
-#if 1
-void produalModbusTest()
-{
+#if 0
+void produalModbusTest() {
 	ModbusMaster node(1); // Create modbus object that connects to slave id 1
 	node.begin(9600); // set transmission rate - other parameters are set inside the object and can't be changed here
 
 	ModbusRegister AO1(&node, 0);
 	ModbusRegister DI1(&node, 4, false);
 
-	const uint16_t fa[20] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+	const uint16_t fa[20] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5,
+			4, 3, 2, 1 };
 
 	while (1) {
 
-		for(int i = 0; i < 20; ++i) {
+		for (int i = 0; i < 20; ++i) {
 			printf("DI1=%4d\n", DI1.read());
-			AO1.write(fa[i]*100);
+			AO1.write(fa[i] * 100);
 			// just print the value without checking if we got a -1
-			printf("AO1=%4d\n", (int) fa[i]*100);
+			printf("AO1=%4d\n", (int) fa[i] * 100);
 
 			Sleep(5000);
 			printf("DI1=%4d\n", DI1.read());

@@ -1,10 +1,9 @@
-core_cm3.h:1405:22:void NVIC_SetPriority(IRQn_Type, uint32_t)	16	static
-core_cm3.h:1532:26:uint32_t SysTick_Config(uint32_t)	16	static
-swm_15xx.h:232:20:void Chip_SWM_MovablePortPinAssign(CHIP_SWM_PIN_MOVABLE_T, uint8_t, uint8_t)	16	static
-socket_mqtt.cpp:43:6:void SysTick_Handler()	4	static
-socket_mqtt.cpp:49:10:uint32_t get_ticks()	4	static
-socket_mqtt.cpp:58:6:void Sleep(int)	16	static
-socket_mqtt.cpp:67:10:uint32_t millis()	4	static
-socket_mqtt.cpp:78:5:int main()	8	static
-socket_mqtt.cpp:150:6:void messageArrived(MessageData*)	24	static
-socket_mqtt.cpp:156:6:void mqttTest()	3176	static
+C:\Users\Santeri\Desktop\Project\modbus_mqtt\lpc_chip_15xx\inc/core_cm3.h:1405:22:void NVIC_SetPriority(IRQn_Type, uint32_t)	16	static
+C:\Users\Santeri\Desktop\Project\modbus_mqtt\lpc_chip_15xx\inc/core_cm3.h:1532:26:uint32_t SysTick_Config(uint32_t)	16	static
+C:\Users\Santeri\Desktop\Project\modbus_mqtt\lpc_chip_15xx\inc/swm_15xx.h:232:20:void Chip_SWM_MovablePortPinAssign(CHIP_SWM_PIN_MOVABLE_T, uint8_t, uint8_t)	16	static
+c:\nxp\mcuxpressoide_11.5.1_7266\ide\plugins\com.nxp.mcuxpresso.tools.win32_11.5.1.202201181444\tools\arm-none-eabi\include\c++\10.3.1\arm-none-eabi\thumb\v7-m\nofp\bits\gthr-default.h:229:1:int __gthread_key_delete(__gthread_key_t)	16	static
+../src/socket_mqtt.cpp:50:6:void SysTick_Handler()	4	static
+../src/socket_mqtt.cpp:56:10:uint32_t get_ticks()	4	static
+../src/socket_mqtt.cpp:64:6:void Sleep(int)	16	static
+../src/socket_mqtt.cpp:72:10:uint32_t millis()	4	static
+../src/socket_mqtt.cpp:82:5:int main()	1080	static
