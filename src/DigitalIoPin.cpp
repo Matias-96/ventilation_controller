@@ -8,7 +8,6 @@
 #include "DigitalIoPin.h"
 #include "chip.h"
 
-
 DigitalIoPin::DigitalIoPin(int port_, int pin_, pinMode mode, bool invert) : port(port_), pin(pin_), inv(invert) {
 	if(mode == output) {
 		Chip_IOCON_PinMuxSet(LPC_IOCON, port, pin, IOCON_MODE_INACT | IOCON_DIGMODE_EN);

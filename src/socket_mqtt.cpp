@@ -20,9 +20,7 @@
 
 // TODO: insert other include files here
 #include <cstdio>
-#include <cstring>
 #include "systick.h"
-#include "LpcUart.h"
 #include "esp8266_socket.h"
 #include "retarget_uart.h"
 #include "ModbusMaster.h"
@@ -30,15 +28,43 @@
 #include "MQTTClient.h"
 #include "DigitalIoPin.h"
 #include "LiquidCrystal.h"
+#include "SDP610.h"
+#include <cstring>
+#include <string.h>
+#include "VentilationSystem.h"
+#include "VentilationFan.h"
+#include <algorithm>
+#include "LpcUart.h"
 
-#define SSID	    ""
-#define PASSWORD    ""
-#define BROKER_IP   ""
+#include "MenuItem.h"
+#include "HumTempModbus.h"
+#include "Co2Modbus.h"
+#include "SimpleMenu.h"
+#include "IntegerEdit.h"
+#include "DecimalEdit.h"
+#include "StringEdit.h"
+#include "Button.h"
+
+#include "MonitorEdit.h"
+#include <LogEdit.h>
+
+#define SSID	    "SmartIotMQTT"
+#define PASSWORD    "SmartIot"
+#define BROKER_IP   "192.168.1.254"
 #define BROKER_PORT  1883
 
 // TODO: insert other definitions and declarations here
 static volatile int counter;
-static volatile uint32_t systicks;
+static volatile uint32_t systicks = 0;
+static volatile bool t3Fired;
+int mrtch;
+
+VentilationSystem *s;
+Button *upBtn;
+Button *backBtn;
+Button *okBtn;
+Button *downBtn;
+SimpleMenu *menu_ptr;
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,10 +73,29 @@ extern "C" {
  * @brief	Handle interrupt from SysTick timer
  * @return	Nothing
  */
+
 void SysTick_Handler(void) {
 	systicks++;
 	if (counter > 0)
 		counter--;
+}
+
+void MRT_IRQHandler(void) {
+	uint32_t int_pend;
+
+	/* Get and clear interrupt pending status for all timers */
+	int_pend = Chip_MRT_GetIntPending();
+	Chip_MRT_ClearIntPending(int_pend);
+
+	if (upBtn && upBtn->read()) {
+		menu_ptr->event(MenuItem::up);
+	} else if (backBtn && backBtn->read()) {
+		menu_ptr->event(MenuItem::back);
+	} else if (okBtn && okBtn->read()) {
+		menu_ptr->event(MenuItem::ok);
+	} else if (downBtn && downBtn->read()) {
+		menu_ptr->event(MenuItem::down);
+	}
 }
 
 uint32_t get_ticks(void) {
@@ -60,6 +105,52 @@ uint32_t get_ticks(void) {
 #ifdef __cplusplus
 }
 #endif
+
+static void setupMRT(uint8_t ch, MRT_MODE_T mode, uint32_t rate) {
+	LPC_MRT_CH_T *pMRT;
+
+	/* Get pointer to timer selected by ch */
+	pMRT = Chip_MRT_GetRegPtr(ch);
+
+	/* Setup timer with rate based on MRT clock */
+	Chip_MRT_SetInterval(pMRT, (Chip_Clock_GetSystemClockRate() / rate) |
+	MRT_INTVAL_LOAD);
+
+	/* Timer mode */
+	Chip_MRT_SetMode(pMRT, mode);
+
+	/* Clear pending interrupt and enable timer */
+	Chip_MRT_IntClear(pMRT);
+	Chip_MRT_SetEnabled(pMRT);
+}
+
+void init_MRT_interupt() {
+	/* MRT Initialization and disable all timers */
+	Chip_MRT_Init();
+	int mrtch;
+	for (mrtch = 0; mrtch < MRT_CHANNELS_NUM; mrtch++) {
+		Chip_MRT_SetDisabled(Chip_MRT_GetRegPtr(mrtch));
+	}
+
+	/* Enable the interrupt for the MRT */
+	NVIC_EnableIRQ(MRT_IRQn);
+
+	/* Get pointer to timer selected by ch */
+	LPC_MRT_CH_T *pMRT = Chip_MRT_GetRegPtr(0);
+
+	/* Setup timer with rate based on MRT clock */
+	// 200ms interval
+	//Chip_MRT_SetInterval(pMRT, 14400000U | MRT_INTVAL_LOAD);
+	// 100ms interval
+	Chip_MRT_SetInterval(pMRT, 7200000 | MRT_INTVAL_LOAD);
+
+	/* Timer mode */
+	Chip_MRT_SetMode(pMRT, MRT_MODE_REPEAT);
+
+	/* Clear pending interrupt and enable timer */
+	Chip_MRT_IntClear(pMRT);
+	Chip_MRT_SetEnabled(pMRT);
+}
 
 void Sleep(int ms) {
 	counter = ms;
@@ -77,6 +168,7 @@ void abbModbusTest();
 void socketTest();
 void mqttTest();
 void produalModbusTest();
+void messageArrived(MessageData *data);
 
 #if 1
 int main(void) {
@@ -102,57 +194,203 @@ int main(void) {
 
 	printf("\nBoot\n");
 
+	ModbusMaster fanNode(1);
+	ModbusMaster co2Node(240);
+	ModbusMaster humTempNode(241);
+
+	fanNode.begin(9600);
+	co2Node.begin(9600);
+	humTempNode.begin(9600);
+
+	ModbusRegister AO1(&fanNode, 0);
+	ModbusRegister DI1(&fanNode, 4, false);
+	ModbusRegister CO2(&co2Node, 256, false);
+	ModbusRegister CO2status(&co2Node, 2049, false);
+	ModbusRegister temp_register(&humTempNode, 257, false);
+
+	DigitalIoPin a5(0, 7, DigitalIoPin::pullup, true);
+	DigitalIoPin a4(0, 6, DigitalIoPin::pullup, true);
+	DigitalIoPin a3(0, 5, DigitalIoPin::pullup, true);
+	DigitalIoPin a2(1, 8, DigitalIoPin::pullup, true);
+
+	Button up(&a5);
+	Button back(&a4);
+	Button ok(&a3);
+	Button down(&a2);
+
+	upBtn = &up;
+	backBtn = &back;
+	okBtn = &ok;
+	downBtn = &down;
+
 	DigitalIoPin *rs = new DigitalIoPin(0, 29, DigitalIoPin::output);
 	DigitalIoPin *en = new DigitalIoPin(0, 9, DigitalIoPin::output);
 	DigitalIoPin *d4 = new DigitalIoPin(0, 10, DigitalIoPin::output);
 	DigitalIoPin *d5 = new DigitalIoPin(0, 16, DigitalIoPin::output);
 	DigitalIoPin *d6 = new DigitalIoPin(1, 3, DigitalIoPin::output);
 	DigitalIoPin *d7 = new DigitalIoPin(0, 0, DigitalIoPin::output);
+
 	LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+	VentilationFan fan(&AO1, &AO1, 0, false);
+	SDP610 pressure_sensor(LPC_I2C0);
+	Co2Modbus co2Probe(&co2Node, 256, 2049);
+	SimpleMenu menu;
+	menu_ptr = &menu;
 
-	// configure display geometry
-	//lcd.begin(16, 2);
-	// set the cursor to column 0, line 1
-	// (note: line 1 is the second row, since counting begins with 0):
-	//lcd.setCursor(0, 0);
-	// Print a message to the LCD.
-	//lcd.print(SSID);
-	//lcd.setCursor(0, 1);
-	//lcd.print(BROKER_IP);
-	//char tmp[8];
-	//sprintf(tmp, ":%d", BROKER_PORT);
-	//lcd.print(tmp);
+	/* connect to mqtt broker, subscribe to a topic,
+	 * send and receive messages regularly every 1 sec */
 
-	//abbModbusTest();
-	//socketTest();
-	//mqttTest();
-	//produalModbusTest();
 
-	// printing co2 measurements -- Matias
 
-	ModbusMaster fanNode(1); // slave address of 1
-	ModbusMaster co2Node(240); // slave address of 240
+	 MQTTClient client;
+	 Network network;
+	 unsigned char sendbuf[256], readbuf[2556];
+	 int rc = 0, count = 0;
+	 MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
 
-	fanNode.begin(9600);
-	co2Node.begin(9600);
 
-	//notice the offset of -1 when defining the register number
-	//ModbusRegister::read() checks the next register over
+	 NetworkInit(&network, SSID, PASSWORD);
+	 MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf,
+	 sizeof(readbuf));
 
-	ModbusRegister AO1(&fanNode, 0); // drive the motor
-	ModbusRegister DI1(&fanNode, 4, false); // set holding register to false if it's read only
-	ModbusRegister CO2(&co2Node, 256, false); // 257 - measured co2 value
-	ModbusRegister CO2status(&co2Node, 2049, false); // 0 if ok
+	 char *address = (char*) BROKER_IP;
+	 if ((rc = NetworkConnect(&network, address, BROKER_PORT)) != 0)
+	 printf("Return code from network connect is %d\n", rc);
 
-	// printing co2 measurements -- Matias
+	 connectData.MQTTVersion = 3;
+	 connectData.clientID.cstring = (char*) "esp_test";
 
-	//AO1.write(500); // fan speed at 50%
+	 bool mqtt_connected;
 
-	while (1) {
-		Sleep(2000);
-		printf("CO2 reading: %d ppm\n", CO2.read()); // returns -1 if read is unsuccessful
-		printf("CO2 status: %d\n", CO2status.read()); // 0 - status OK
+	 if ((rc = MQTTConnect(&client, &connectData)) != 0) {
+	 printf("Return code from MQTT connect is %d\n", rc);
+	 mqtt_connected = false;
+	 }
+
+	 else {
+	 printf("MQTT Connected\n");
+	 mqtt_connected = true;
+	 }
+
+	 if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2,
+	 messageArrived)) != 0)
+	 printf("Return code from MQTT subscribe is %d\n", rc);
+
+	VentilationSystem system(&fan, &pressure_sensor, false, 0);
+
+	s = &system;
+	uint32_t sec_20 = 0;
+	uint32_t sec_5 = 0;
+	uint32_t sec_2 = 0;
+
+	std::vector<std::string> modeOptions = { "Auto", "Manual" };
+	StringEdit modeEdit(&lcd, "Mode", modeOptions);
+
+	std::vector<std::string> statusLog = { "Fan", "GMP252", "HMP60", "SDP610" }; // TODO append with relevant codes
+	LogEdit status(&lcd, "Device Status", statusLog);
+	std::vector<int> statusValues = { 1, 2, 3, 4 };
+	status.setValues(statusValues);
+
+	IntegerEdit fanSpeed(&lcd, "Set fan speed", 0, 100, 10, "%");
+	IntegerEdit targetPressure(&lcd, "Set pressure", 0, 120, 10, "Pa");
+	MonitorEdit monitor(&lcd, "Pa", "Ppm", "RH%", "C");
+	monitor.setValues(100, 600, 30, 23);
+
+	menu.addItem(new MenuItem(&monitor));
+	menu.addItem(new MenuItem(&status));
+	menu.addItem(new MenuItem(&modeEdit));
+	menu.addItem(new MenuItem(&fanSpeed));
+	menu.addItem(new MenuItem(&targetPressure));
+
+	menu.event(MenuItem::show);
+
+	/* MRT Initialization and disable all timers */
+	Chip_MRT_Init();
+	for (mrtch = 0; mrtch < MRT_CHANNELS_NUM; mrtch++) {
+		Chip_MRT_SetDisabled(Chip_MRT_GetRegPtr(mrtch));
 	}
+
+	/* Enable the interrupt for the MRT */
+	NVIC_EnableIRQ(MRT_IRQn);
+
+	/* Enable timers 0 and 1 in repeat mode with different rates */
+	setupMRT(0, MRT_MODE_REPEAT, 2);/* 2Hz rate */
+	setupMRT(1, MRT_MODE_REPEAT, 5);/* 5Hz rate */
+
+	/* Enable timer 2 in single one mode with the interrupt restarting the
+	 timer */
+	setupMRT(2, MRT_MODE_ONESHOT, 7); /* Will fire in 1/7 seconds */
+
+	/* All processing and MRT reset in the interrupt handler */
+
+	while (true) {
+
+		if (get_ticks() / 2000 != sec_2) {
+			sec_2 = get_ticks() / 2000;
+
+			if (modeEdit.getValue() == "Manual") {
+				system.set_speed(fanSpeed.getValue() * 10);
+			} else {
+				fanSpeed.setValue(system.get_speed());
+				system.set_target_pressure(targetPressure.getValue());
+			}
+
+			system.adjust();
+		}
+
+		 if (mqtt_connected && get_ticks() / 2000 != sec_5) {
+		 sec_5 = get_ticks() / 2000;
+		 MQTTMessage message;
+		 char payload[150];
+
+		 ++count;
+
+		 message.qos = QOS1;
+		 message.retained = 0;
+		 message.payload = payload;
+		 sprintf(payload,
+		 "{\"nr\":%4d, \"speed\":%3d, \"setpoint\":%3d, \"pressure\":%3d, \"auto\":%5s, \"error\":%5s, \"co2\":300, \"rh\":37, \"temp\":20 }",
+		 count, system.get_speed(),
+		 system.get_mode() ?
+		 system.get_target_pressure() : system.get_speed(),
+		 system.get_pressure(), system.get_mode() ? "true" : "false",
+		 system.error() ? "true" : "false");
+		 message.payloadlen = strlen(payload);
+
+		 if ((rc = MQTTPublish(&client, "controller/status", &message))
+		 != 0) {
+		 printf("Return code from MQTT publish is %d\n", rc);
+		 mqtt_connected = false;
+		 }
+		 }
+
+		 // Try to reconnect every 20 seconds
+		 if (!mqtt_connected && get_ticks() / 20000 != sec_20) {
+		 printf("trying to reconnect to MQTT\n");
+		 sec_20 = get_ticks() / 20000;
+		 //NetworkDisconnect(&network);
+		 // we should re-establish connection!!
+		 if ((rc = MQTTConnect(&client, &connectData)) != 0) {
+		 printf("Return code from MQTT connect is %d\n", rc);
+		 } else {
+		 printf("MQTT Connected\n");
+		 mqtt_connected = true;
+		 if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2,
+		 messageArrived)) != 0)
+		 printf("Return code from MQTT subscribe is %d\n", rc);
+		 }
+
+		 //break;
+		 }
+
+		 // run MQTT for 100 ms
+		 if ((rc = MQTTYield(&client, 100)) != 0)
+		 printf("Return code from yield is %d\n", rc);
+	}
+
+	printf("MQTT connection closed!\n");
+
+	while (1) {}
 
 	return 0;
 
@@ -191,48 +429,102 @@ void socketTest()
 }
 #endif
 
-#if 0
+#if 1
 
-void messageArrived(MessageData* data)
-{
-	printf("Message arrived on topic %.*s: %.*s\n", data->topicName->lenstring.len, data->topicName->lenstring.data,
-			data->message->payloadlen, (char *)data->message->payload);
+void messageArrived(MessageData *data) {
+	//printf("Message arrived on topic %.*s: %.*s\n", data->topicName->lenstring.len, data->topicName->lenstring.data,
+	//		data->message->payloadlen, (char *)data->message->payload);
+	std::string input((char*) data->message->payload,
+			data->message->payloadlen);
+	// Remove unwanted characters from input
+	input.erase(remove(input.begin(), input.end(), ' '), input.end());
+	input.erase(remove(input.begin(), input.end(), '"'), input.end());
+	input.erase(remove(input.begin(), input.end(), '{'), input.end());
+	input.erase(remove(input.begin(), input.end(), '}'), input.end());
+
+	size_t separator_position = input.find(",");
+	if (separator_position == std::string::npos) {
+		// Invalid msg
+		// TODO Set active error.
+		return;
+	}
+	std::string mode = input.substr(0, separator_position);
+	std::string value = input.substr(separator_position + 1,
+			input.length() - separator_position - 1);
+	bool auto_mode = false;
+
+	if (mode.find("auto") == 0) {
+		if (mode.find("true") != std::string::npos) {
+			auto_mode = true;
+			printf("Mode: auto\n");
+		} else if (mode.find("false") != std::string::npos) {
+			auto_mode = false;
+			printf("Mode: manual\n");
+		} else {
+			printf("Value is invalid\r\n");
+			// TODO Set active error.
+			return;
+		}
+	} else {
+		printf("Invalid input\r\n");
+		// TODO Set active error.
+		return;
+	}
+
+	size_t colon_pos = value.find(":", 0);
+	int reading = 0;
+	if (value.find("pressure") != std::string::npos) {
+		reading = std::stoi(value.substr(colon_pos + 1, std::string::npos));
+		printf("Pressure input: %d\r\n", reading);
+	} else if (value.find("speed") != std::string::npos) {
+		reading = std::stoi(value.substr(colon_pos + 1, std::string::npos));
+		printf("Speed input: %d\r\n", reading);
+	} else {
+		printf("Value is invalid\r\n");
+		// TODO Set active error.
+		return;
+	}
+
+	s->set_mode(auto_mode);
+	if (auto_mode) {
+		s->set_target_pressure(reading);
+	} else {
+		s->set_speed(reading);
+	}
+
 }
 
-void mqttTest()
-{
+void mqttTest() {
 	/* connect to mqtt broker, subscribe to a topic, send and receive messages regularly every 1 sec */
 	MQTTClient client;
 	Network network;
 	unsigned char sendbuf[256], readbuf[2556];
-	int rc = 0,
-			count = 0;
+	int rc = 0, count = 0;
 	MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
 
-	NetworkInit(&network,SSID,PASSWORD);
-	MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
+	NetworkInit(&network, SSID, PASSWORD);
+	MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf,
+			sizeof(readbuf));
 
-	char* address = (char *)BROKER_IP;
+	char *address = (char*) BROKER_IP;
 	if ((rc = NetworkConnect(&network, address, BROKER_PORT)) != 0)
 		printf("Return code from network connect is %d\n", rc);
 
-
 	connectData.MQTTVersion = 3;
-	connectData.clientID.cstring = (char *)"esp_test";
+	connectData.clientID.cstring = (char*) "esp_test";
 
 	if ((rc = MQTTConnect(&client, &connectData)) != 0)
 		printf("Return code from MQTT connect is %d\n", rc);
 	else
 		printf("MQTT Connected\n");
 
-	if ((rc = MQTTSubscribe(&client, "test/sample/#", QOS2, messageArrived)) != 0)
+	if ((rc = MQTTSubscribe(&client, "test/sample", QOS2, messageArrived)) != 0)
 		printf("Return code from MQTT subscribe is %d\n", rc);
 
 	uint32_t sec = 0;
-	while (true)
-	{
+	while (true) {
 		// send one message per second
-		if(get_ticks() / 1000 != sec) {
+		if (get_ticks() / 1000 != sec) {
 			MQTTMessage message;
 			char payload[30];
 
@@ -245,11 +537,11 @@ void mqttTest()
 			sprintf(payload, "message number %d", count);
 			message.payloadlen = strlen(payload);
 
-			if ((rc = MQTTPublish(&client, "test/sample/a", &message)) != 0)
+			if ((rc = MQTTPublish(&client, "controller/status", &message)) != 0)
 				printf("Return code from MQTT publish is %d\n", rc);
 		}
 
-		if(rc != 0) {
+		if (rc != 0) {
 			NetworkDisconnect(&network);
 			// we should re-establish connection!!
 			break;
