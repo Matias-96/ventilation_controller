@@ -25,6 +25,7 @@ public:
     bool getFocus() override;
     void display() override;
     std::string getValue();
+    void setValue(std::string text);
 
 private:
     LiquidCrystal *lcd;

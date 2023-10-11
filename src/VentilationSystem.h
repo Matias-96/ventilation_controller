@@ -22,12 +22,16 @@ public:
 			bool _auto_mode = false,
 			int _target_pressure = 0);
 
+
 	void tick();
 	void adjust();
 	void set_mode(bool mode);
 	void set_speed(int speed);
 	void set_target_pressure(int pressure);
 	uint8_t error() const;
+	uint8_t pressure_error() const;
+	uint8_t sensor_error() const;
+	uint8_t fan_error() const;
 	int get_pressure() const;
 	int get_speed() const;
 	int get_target_pressure() const;
@@ -41,13 +45,17 @@ private:
 	float fan_speed;
 	int pressure;
 
-	const int time_to_reach_target_pressure = 30000;
+	const int time_to_reach_target_pressure = 120000;
 	uint8_t error_codes;
 	volatile int counter;
 
 	float last_error = 0;
 	float last_integral = 0;
 	int previous_fan_value = 0;
+
+	const int MAX_PRESSURE = 120;
+	const int pressure_count = 5;
+	int prev_pressure_measurements[5] = {0};
 
 
 	void set_error(ERROR error);

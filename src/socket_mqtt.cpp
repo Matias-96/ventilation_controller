@@ -35,10 +35,12 @@
 #include "VentilationFan.h"
 #include <algorithm>
 #include "LpcUart.h"
+#include "GMP252.h"
+#include "HMP60.h"
 
 #include "MenuItem.h"
 #include "HumTempModbus.h"
-#include "Co2Modbus.h"
+//#include "Co2Modbus.h"
 #include "SimpleMenu.h"
 #include "IntegerEdit.h"
 #include "DecimalEdit.h"
@@ -50,7 +52,7 @@
 
 #define SSID	    "SmartIotMQTT"
 #define PASSWORD    "SmartIot"
-#define BROKER_IP   "192.168.1.254"
+#define BROKER_IP   "192.168.1.106"
 #define BROKER_PORT  1883
 
 // TODO: insert other definitions and declarations here
@@ -65,6 +67,11 @@ Button *backBtn;
 Button *okBtn;
 Button *downBtn;
 SimpleMenu *menu_ptr;
+
+IntegerEdit *speed_ptr;
+IntegerEdit *pressure_ptr;
+StringEdit *mode_ptr;
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -105,24 +112,6 @@ uint32_t get_ticks(void) {
 #ifdef __cplusplus
 }
 #endif
-
-static void setupMRT(uint8_t ch, MRT_MODE_T mode, uint32_t rate) {
-	LPC_MRT_CH_T *pMRT;
-
-	/* Get pointer to timer selected by ch */
-	pMRT = Chip_MRT_GetRegPtr(ch);
-
-	/* Setup timer with rate based on MRT clock */
-	Chip_MRT_SetInterval(pMRT, (Chip_Clock_GetSystemClockRate() / rate) |
-	MRT_INTVAL_LOAD);
-
-	/* Timer mode */
-	Chip_MRT_SetMode(pMRT, mode);
-
-	/* Clear pending interrupt and enable timer */
-	Chip_MRT_IntClear(pMRT);
-	Chip_MRT_SetEnabled(pMRT);
-}
 
 void init_MRT_interupt() {
 	/* MRT Initialization and disable all timers */
@@ -195,18 +184,18 @@ int main(void) {
 	printf("\nBoot\n");
 
 	ModbusMaster fanNode(1);
-	ModbusMaster co2Node(240);
-	ModbusMaster humTempNode(241);
+	//ModbusMaster co2Node(240);
+	//ModbusMaster humTempNode(241);
 
 	fanNode.begin(9600);
-	co2Node.begin(9600);
-	humTempNode.begin(9600);
+	//co2Node.begin(9600);
+	//humTempNode.begin(9600);
 
 	ModbusRegister AO1(&fanNode, 0);
 	ModbusRegister DI1(&fanNode, 4, false);
-	ModbusRegister CO2(&co2Node, 256, false);
-	ModbusRegister CO2status(&co2Node, 2049, false);
-	ModbusRegister temp_register(&humTempNode, 257, false);
+	//ModbusRegister CO2(&co2Node, 256, false);
+	//ModbusRegister CO2status(&co2Node, 2049, false);
+	//ModbusRegister temp_register(&humTempNode, 257, false);
 
 	DigitalIoPin a5(0, 7, DigitalIoPin::pullup, true);
 	DigitalIoPin a4(0, 6, DigitalIoPin::pullup, true);
@@ -233,7 +222,7 @@ int main(void) {
 	LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 	VentilationFan fan(&AO1, &AO1, 0, false);
 	SDP610 pressure_sensor(LPC_I2C0);
-	Co2Modbus co2Probe(&co2Node, 256, 2049);
+	//Co2Modbus co2Probe(&co2Node, 256, 2049);
 	SimpleMenu menu;
 	menu_ptr = &menu;
 
@@ -250,7 +239,7 @@ int main(void) {
 
 
 	 NetworkInit(&network, SSID, PASSWORD);
-	 MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf,
+	 MQTTClientInit(&client, &network, 5000, sendbuf, sizeof(sendbuf), readbuf,
 	 sizeof(readbuf));
 
 	 char *address = (char*) BROKER_IP;
@@ -276,25 +265,29 @@ int main(void) {
 	 messageArrived)) != 0)
 	 printf("Return code from MQTT subscribe is %d\n", rc);
 
-	VentilationSystem system(&fan, &pressure_sensor, false, 0);
+	VentilationSystem system(&fan, &pressure_sensor, true, 0);
 
 	s = &system;
 	uint32_t sec_20 = 0;
 	uint32_t sec_5 = 0;
-	uint32_t sec_2 = 0;
+	uint32_t sec_3 = 0;
 
 	std::vector<std::string> modeOptions = { "Auto", "Manual" };
 	StringEdit modeEdit(&lcd, "Mode", modeOptions);
+	mode_ptr = &modeEdit;
 
-	std::vector<std::string> statusLog = { "Fan", "GMP252", "HMP60", "SDP610" }; // TODO append with relevant codes
+	std::vector<std::string> statusLog = { "Pressure", "Fan", "GMP252", "HMP60", "SDP610" }; // TODO append with relevant codes
 	LogEdit status(&lcd, "Device Status", statusLog);
-	std::vector<int> statusValues = { 1, 2, 3, 4 };
+	std::vector<int> statusValues = { 0, 0, 0, 0, 0 };
 	status.setValues(statusValues);
 
-	IntegerEdit fanSpeed(&lcd, "Set fan speed", 0, 100, 10, "%");
-	IntegerEdit targetPressure(&lcd, "Set pressure", 0, 120, 10, "Pa");
+	IntegerEdit fanSpeed(&lcd, "Set fan speed", 0, 100, 1, "%");
+	IntegerEdit targetPressure(&lcd, "Set pressure", 0, 120, 1, "Pa");
 	MonitorEdit monitor(&lcd, "Pa", "Ppm", "RH%", "C");
 	monitor.setValues(100, 600, 30, 23);
+
+	speed_ptr = &fanSpeed;
+	pressure_ptr = &targetPressure;
 
 	menu.addItem(new MenuItem(&monitor));
 	menu.addItem(new MenuItem(&status));
@@ -304,64 +297,79 @@ int main(void) {
 
 	menu.event(MenuItem::show);
 
-	/* MRT Initialization and disable all timers */
-	Chip_MRT_Init();
-	for (mrtch = 0; mrtch < MRT_CHANNELS_NUM; mrtch++) {
-		Chip_MRT_SetDisabled(Chip_MRT_GetRegPtr(mrtch));
-	}
+	HMP60 temp_humidity_sensor;
+	GMP252 co2_sensor;
 
-	/* Enable the interrupt for the MRT */
-	NVIC_EnableIRQ(MRT_IRQn);
-
-	/* Enable timers 0 and 1 in repeat mode with different rates */
-	setupMRT(0, MRT_MODE_REPEAT, 2);/* 2Hz rate */
-	setupMRT(1, MRT_MODE_REPEAT, 5);/* 5Hz rate */
-
-	/* Enable timer 2 in single one mode with the interrupt restarting the
-	 timer */
-	setupMRT(2, MRT_MODE_ONESHOT, 7); /* Will fire in 1/7 seconds */
-
-	/* All processing and MRT reset in the interrupt handler */
+	init_MRT_interupt();
 
 	while (true) {
 
-		if (get_ticks() / 2000 != sec_2) {
-			sec_2 = get_ticks() / 2000;
+		if (get_ticks() / 3000 != sec_3) {
+			sec_3 = get_ticks() / 3000;
 
 			if (modeEdit.getValue() == "Manual") {
-				system.set_speed(fanSpeed.getValue() * 10);
+				system.set_speed(fanSpeed.getValue());
+				system.set_mode(false);
 			} else {
 				fanSpeed.setValue(system.get_speed());
 				system.set_target_pressure(targetPressure.getValue());
+				system.set_mode(true);
 			}
 
 			system.adjust();
 		}
 
-		 if (mqtt_connected && get_ticks() / 2000 != sec_5) {
-		 sec_5 = get_ticks() / 2000;
-		 MQTTMessage message;
-		 char payload[150];
+		 if (mqtt_connected && get_ticks() / 5000 != sec_5) {
+			 sec_5 = get_ticks() / 5000;
+			 MQTTMessage message;
+			 char payload[150];
 
-		 ++count;
+			 ++count;
 
-		 message.qos = QOS1;
-		 message.retained = 0;
-		 message.payload = payload;
-		 sprintf(payload,
-		 "{\"nr\":%4d, \"speed\":%3d, \"setpoint\":%3d, \"pressure\":%3d, \"auto\":%5s, \"error\":%5s, \"co2\":300, \"rh\":37, \"temp\":20 }",
-		 count, system.get_speed(),
-		 system.get_mode() ?
-		 system.get_target_pressure() : system.get_speed(),
-		 system.get_pressure(), system.get_mode() ? "true" : "false",
-		 system.error() ? "true" : "false");
-		 message.payloadlen = strlen(payload);
+			 Sleep(5);
+			int humidity = temp_humidity_sensor.getHumidity();
+			Sleep(5);
+			int co2 = co2_sensor.get_co2();
+			Sleep(5);
+			int temp = temp_humidity_sensor.getTemperature();
+			Sleep(5);
+			int temp_sensor_status = temp_humidity_sensor.getStatus();
+			Sleep(5);
+			int co2_sensor_status = co2_sensor.getStatus();
+			int pressure = system.get_pressure();
+			monitor.setValues(pressure, co2, humidity, temp);
 
-		 if ((rc = MQTTPublish(&client, "controller/status", &message))
-		 != 0) {
-		 printf("Return code from MQTT publish is %d\n", rc);
-		 mqtt_connected = false;
-		 }
+			//printf("%d %d \n", co2_sensor_status, temp_sensor_status);
+
+			//{ "Pressure", "Fan", "GMP252", "HMP60", "SDP610" };
+			statusValues[0] = system.pressure_error();
+			statusValues[1] = system.fan_error();
+			statusValues[2] = co2_sensor_status;
+			statusValues[3] = temp_sensor_status;
+			statusValues[4] = system.sensor_error();
+			status.setValues(statusValues);
+
+			menu.event(MenuItem::show);
+
+			 message.qos = QOS1;
+			 message.retained = 0;
+			 message.payload = payload;
+			sprintf(payload, "{\"nr\":%4d, \"speed\":%3d, \"setpoint\":%3d, \"pressure\":%3d, \"auto\":%5s, \"error\":%5s, \"co2\":%d, \"rh\":%d, \"temp\":%d }",
+					count,
+					system.get_speed(),
+					system.get_mode() ? system.get_target_pressure() : system.get_speed(),
+					pressure,
+					system.get_mode() ? "true" : "false",
+					system.error() ? "true" : "false",
+					co2,
+					humidity,
+					temp);
+			 message.payloadlen = strlen(payload);
+
+			 if ((rc = MQTTPublish(&client, "controller/status", &message)) != 0) {
+				 printf("Return code from MQTT publish is %d\n", rc);
+				 mqtt_connected = false;
+			 }
 		 }
 
 		 // Try to reconnect every 20 seconds
@@ -397,38 +405,6 @@ int main(void) {
 }
 #endif
 
-#if 0  // example of opening a plain socket
-void socketTest()
-{
-
-	esp_socket(SSID, PASSWORD);
-
-	const char *http_request = "GET / HTTP/1.0\r\n\r\n"; // HTTP requires cr-lf to end a line
-
-	for(int i = 0; i < 2; ++i) {
-		printf("\nopen socket\n");
-		esp_connect(1,  "www.metropolia.fi", 80);
-		printf("\nsend request\n");
-		esp_write(1, http_request, strlen(http_request));
-
-		uint32_t now = get_ticks();
-		printf("\nreply:\n");
-
-		while(get_ticks() - now < 3000) {
-			char buffer[64];
-			memset(buffer, 0, 64);
-			if(esp_read(1, buffer, 63) > 0) {
-				fputs(buffer,stdout);
-			}
-		}
-		esp_close(1);
-
-		printf("\nsocket closed\n");
-	}
-
-}
-#endif
-
 #if 1
 
 void messageArrived(MessageData *data) {
@@ -444,6 +420,7 @@ void messageArrived(MessageData *data) {
 
 	size_t separator_position = input.find(",");
 	if (separator_position == std::string::npos) {
+		printf("Invalid MQTT message\n");
 		// Invalid msg
 		// TODO Set active error.
 		return;
@@ -486,11 +463,17 @@ void messageArrived(MessageData *data) {
 	}
 
 	s->set_mode(auto_mode);
+
 	if (auto_mode) {
 		s->set_target_pressure(reading);
+		mode_ptr->setValue(std::string("Auto"));
+		pressure_ptr->setValue(reading);
 	} else {
 		s->set_speed(reading);
+		speed_ptr->setValue(reading);
+		mode_ptr->setValue(std::string("Manual"));
 	}
+	menu_ptr->event(MenuItem::show);
 
 }
 

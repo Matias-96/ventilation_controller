@@ -59,3 +59,7 @@ void StringEdit::display() {
 std::string StringEdit::getValue() {
     return options[selectedIndex];
 }
+
+void StringEdit::setValue(std::string text){
+	options[selectedIndex] = text;
+}
