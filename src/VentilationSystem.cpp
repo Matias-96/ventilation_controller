@@ -7,8 +7,6 @@
 
 
 #include "VentilationSystem.h"
-#include <cmath>
-
 
 VentilationSystem::VentilationSystem(
 	VentilationFan *_fan,
@@ -20,9 +18,9 @@ VentilationSystem::VentilationSystem(
 		auto_mode(_auto_mode),
 		target_pressure(_target_pressure),
 		fan_speed(0),
+		pressure(0),
 		error_codes(0),
-		counter(0),
-		pressure(0)
+		counter(0)
 {
 
 }
@@ -33,7 +31,7 @@ void VentilationSystem::tick(){
 }
 
 void VentilationSystem::adjust(){
-	// In either of these conditions fan is supposed to spin
+	// In one of these conditions fan is supposed to spin
 	if(( auto_mode && target_pressure > 0 && fan_speed > 0 ) || fan_speed > 0){
 		int new_fan_value = fan->readFan();
 		if(previous_fan_value == 0 && new_fan_value == 0)
@@ -65,6 +63,7 @@ void VentilationSystem::adjust(){
 	}
 
 	if(auto_mode){
+		// Check if target pressure is reached in auto mode and update error status
 		if(pressure == target_pressure){
 			unset_error(ERROR::PRESSURE_NOT_REACHED);
 			counter = 0;
@@ -73,30 +72,27 @@ void VentilationSystem::adjust(){
 			set_error(ERROR::PRESSURE_NOT_REACHED);
 		}
 
-		// Adjust pressure
+		// Adjust fan if pressure sensor reading was successful
 		if(!i2c_error){
-			//int diff = abs(target_pressure - measured_pressure);
 			if(target_pressure > 0){
 				float KP = 0.25;
 				float KI = 0.03;
 				float KD = 0.4;
-				//float diff = target_pressure - measured_pressure;
 				float error = target_pressure - pressure;
 
 				float integral = last_integral + error * 3;
 				float derivative = (error - last_error) / 3;
 				float output = KP*error + KI*integral + KD*derivative;
 				last_error = error;
-				//printf("Integral: %f, Last integral: %f\n", integral, last_integral);
 				last_integral = integral;
-				fan_speed = output;
 
-				if(fan_speed > 100.0){
-					fan_speed = 100.0;
+				if(output > 100.0){
+					output = 100.0;
 				}
-				else if(fan_speed < 0){
-					fan_speed = 0;
+				else if(output < 0){
+					output = 0;
 				}
+				fan_speed = output;
 				fan->setSpeed(fan_speed);
 			}
 			else {
@@ -105,6 +101,7 @@ void VentilationSystem::adjust(){
 			}
 		}
 	}
+	// Manual mode
 	else {
 		fan->setSpeed(fan_speed);
 	}
@@ -120,7 +117,6 @@ void VentilationSystem::set_mode(bool mode){
 }
 
 void VentilationSystem::set_speed(int speed){
-	//printf("Set new speed\n");
 	if(speed < 0){
 		fan_speed = 0;
 	}
@@ -133,14 +129,12 @@ void VentilationSystem::set_speed(int speed){
 }
 
 void VentilationSystem::set_target_pressure(int new_pressure){
-	//printf("New pressure set\n");
 	if(new_pressure < 0){
 		new_pressure = 0;
 	}
 	else if(new_pressure > MAX_PRESSURE){
 		new_pressure = MAX_PRESSURE;
 	}
-
 
 	// If adjusting is started from zero, give a "kick" to system so it starts to adjust pressure faster
 	if(auto_mode && target_pressure == 0){

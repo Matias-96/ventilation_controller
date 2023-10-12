@@ -6,6 +6,7 @@
  */
 
 #include "StringEdit.h"
+#include <cstdint>
 
 StringEdit::StringEdit(LiquidCrystal *lcd_, const std::string &editTitle, const std::vector<std::string> &options)
     : lcd(lcd_), title(editTitle), options(options), selectedIndex(0), focus(false) {
@@ -61,5 +62,10 @@ std::string StringEdit::getValue() {
 }
 
 void StringEdit::setValue(std::string text){
-	options[selectedIndex] = text;
+	for(uint32_t i = 0; i < options.size(); i++){
+		if(text == options[i]){
+			selectedIndex = i;
+			break;
+		}
+	}
 }

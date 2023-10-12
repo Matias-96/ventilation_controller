@@ -154,10 +154,6 @@ uint32_t millis() {
 	return systicks;
 }
 
-void abbModbusTest();
-void socketTest();
-void mqttTest();
-void produalModbusTest();
 void messageArrived(MessageData *data);
 
 #if 1
@@ -266,7 +262,7 @@ int main(void) {
 			 printf("Return code from MQTT subscribe is %d\n", rc);
 	 }
 
-	uint32_t sec_20 = 0;
+	uint32_t sec_60 = 0;
 	uint32_t sec_5 = 0;
 	uint32_t sec_3 = 0;
 
@@ -283,7 +279,7 @@ int main(void) {
 	IntegerEdit fanSpeed(&lcd, "Set fan speed", 0, 100, 1, "%");
 	IntegerEdit targetPressure(&lcd, "Set pressure", 0, 120, 1, "Pa");
 	MonitorEdit monitor(&lcd, "Pa", "Ppm", "RH%", "C");
-	monitor.setValues(100, 600, 30, 23);
+	monitor.setValues(0, 0, 0, 0);
 
 	menu_speed = &fanSpeed;
 	menu_pressure = &targetPressure;
@@ -319,12 +315,8 @@ int main(void) {
 			system.adjust();
 		}
 
-		 if (mqtt_connected && get_ticks() / 5000 != sec_5) {
+		 if (get_ticks() / 5000 != sec_5) {
 			 sec_5 = get_ticks() / 5000;
-			 MQTTMessage message;
-			 char payload[150];
-
-			 ++count;
 			 int pressure = system.get_pressure();
 
 			Sleep(5);
@@ -348,54 +340,62 @@ int main(void) {
 			status.setValues(statusValues);
 
 			menu.event(MenuItem::show);
+			if(mqtt_connected){
+				 MQTTMessage message;
+				 char payload[150];
+				 ++count;
 
-			 message.qos = QOS1;
-			 message.retained = 0;
-			 message.payload = payload;
-			sprintf(payload, "{\"nr\":%4d, \"speed\":%3d, \"setpoint\":%3d, \"pressure\":%3d, \"auto\":%5s, \"error\":%5s, \"co2\":%d, \"rh\":%d, \"temp\":%d }",
-					count,
-					system.get_speed(),
-					system.get_mode() ? system.get_target_pressure() : system.get_speed(),
-					pressure,
-					system.get_mode() ? "true" : "false",
-					system.pressure_error() ? "true" : "false",
-					co2,
-					humidity,
-					temp);
-			 message.payloadlen = strlen(payload);
+				 message.qos = QOS1;
+				 message.retained = 0;
+				 message.payload = payload;
+				sprintf(payload, "{\"nr\":%4d, \"speed\":%3d, \"setpoint\":%3d, \"pressure\":%3d, \"auto\":%5s, \"error\":%5s, \"co2\":%d, \"rh\":%d, \"temp\":%d }",
+						count,
+						system.get_speed(),
+						system.get_mode() ? system.get_target_pressure() : system.get_speed(),
+						pressure,
+						system.get_mode() ? "true" : "false",
+						system.pressure_error() ? "true" : "false",
+						co2,
+						humidity,
+						temp);
+				 message.payloadlen = strlen(payload);
 
-			 mqtt_status = rc = MQTTPublish(&client, "controller/status", &message);
-			 if (rc != 0) {
-				 printf("Return code from MQTT publish is %d\n", rc);
-				 mqtt_connected = false;
-			 }
+				 mqtt_status = rc = MQTTPublish(&client, "controller/status", &message);
+				 if (rc != 0) {
+					 printf("Return code from MQTT publish is %d\n", rc);
+					 mqtt_connected = false;
+				 }
+			}
 		 }
 
-		 // Try to reconnect every 20 seconds
-		 if (!mqtt_connected && get_ticks() / 20000 != sec_20) {
+		 // Try to reconnect every 60 seconds if connection to broker breaks
+		 if (!mqtt_connected && get_ticks() / 60000 != sec_60) {
 			 printf("trying to reconnect to MQTT\n");
-			 sec_20 = get_ticks() / 20000;
-			 //NetworkDisconnect(&network);
-			 // we should re-establish connection!!
-			 if ((rc = MQTTConnect(&client, &connectData)) != 0) {
+			 sec_60 = get_ticks() / 60000;
+			 mqtt_status = rc = MQTTConnect(&client, &connectData);
+			 if (rc != 0) {
 				 printf("Return code from MQTT connect is %d\n", rc);
 			 }
 			 else {
 				 printf("MQTT Connected\n");
 				 mqtt_connected = true;
-			 if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived)) != 0)
-				 printf("Return code from MQTT subscribe is %d\n", rc);
+				 mqtt_status = rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived);
+				 if (rc != 0){
+					 mqtt_connected = false;
+					 printf("Return code from MQTT subscribe is %d\n", rc);
+				 }
 			 }
-
-			 //break;
 		 }
 
 		 // run MQTT for 100 ms
-		 if ((rc = MQTTYield(&client, 100)) != 0)
-		 printf("Return code from yield is %d\n", rc);
-	}
+		 if(mqtt_connected){
+			 mqtt_status = rc = MQTTYield(&client, 100);
+			 if (rc != 0){
+				 printf("Return code from yield is %d\n", rc);
+			 }
+		 }
 
-	printf("MQTT connection closed!\n");
+	}
 
 	while (1) {}
 
