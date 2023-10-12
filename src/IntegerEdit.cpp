@@ -69,6 +69,12 @@ int IntegerEdit::getValue() {
 	return value;
 }
 void IntegerEdit::setValue(int value) {
+	if(value > maxValue){
+		value = maxValue;
+	}
+	else if(value < minValue){
+		value = minValue;
+	}
 	edit = value;
 	save();
 }

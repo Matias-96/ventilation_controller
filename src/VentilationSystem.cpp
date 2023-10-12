@@ -32,9 +32,11 @@ void VentilationSystem::tick(){
 
 void VentilationSystem::adjust(){
 	// In one of these conditions fan is supposed to spin
-	if(( auto_mode && target_pressure > 0 && fan_speed > 0 ) || fan_speed > 0){
+	if(( auto_mode && target_pressure > 0) || fan_speed > 0){
 		int new_fan_value = fan->readFan();
 		if(previous_fan_value == 0 && new_fan_value == 0)
+			set_error(ERROR::FAN_NOT_SPINNING);
+		else if(new_fan_value < 0)// Reading the status value failed, indicate error even though fan might be spinning
 			set_error(ERROR::FAN_NOT_SPINNING);
 		else
 			unset_error(ERROR::FAN_NOT_SPINNING);
@@ -44,7 +46,7 @@ void VentilationSystem::adjust(){
 		unset_error(ERROR::FAN_NOT_SPINNING);
 	}
 
-	// Measure pressure and update running average value
+	// Measure pressure and update running average value if reading is successful
 	int i2c_error = 0;
 	int measured_pressure = pressure_sensor->read(i2c_error);
 	if(i2c_error){
@@ -54,6 +56,7 @@ void VentilationSystem::adjust(){
 		unset_error(ERROR::I2C_ERROR);
 
 		int sum = 0;
+		// Calculate running average of previous pressure measurements
 		for(int i = 0; i < pressure_count - 1; i++){
 			prev_pressure_measurements[i] = prev_pressure_measurements[i+1];
 			sum += prev_pressure_measurements[i];
@@ -72,7 +75,7 @@ void VentilationSystem::adjust(){
 			set_error(ERROR::PRESSURE_NOT_REACHED);
 		}
 
-		// Adjust fan if pressure sensor reading was successful
+		// Adjust fan speed if reading pressure sensor was successful
 		if(!i2c_error){
 			if(target_pressure > 0){
 				float KP = 0.25;

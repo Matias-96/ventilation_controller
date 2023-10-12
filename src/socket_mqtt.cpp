@@ -50,9 +50,13 @@
 #include <mutex>
 #include "Imutex.hpp"
 
-#define SSID	    "SmartIotMQTT"
-#define PASSWORD    "SmartIot"
-#define BROKER_IP   "192.168.1.106"
+//#define SSID	    "SmartIotMQTT"
+//#define PASSWORD    "SmartIot"
+//#define BROKER_IP   "192.168.1.106"
+
+#define SSID	    "TP_Link_20E6"
+#define PASSWORD    "Oranssikesakyy105"
+#define BROKER_IP   "192.168.1.101"
 #define BROKER_PORT  1883
 
 // TODO: insert other definitions and declarations here
@@ -129,10 +133,9 @@ void init_MRT_interupt() {
 	LPC_MRT_CH_T *pMRT = Chip_MRT_GetRegPtr(0);
 
 	/* Setup timer with rate based on MRT clock */
-	// 200ms interval
-	//Chip_MRT_SetInterval(pMRT, 14400000U | MRT_INTVAL_LOAD);
 	// 100ms interval
-	Chip_MRT_SetInterval(pMRT, 7200000 | MRT_INTVAL_LOAD);
+	uint32_t value = 100 * (SystemCoreClock / 1000);
+	Chip_MRT_SetInterval(pMRT, value | MRT_INTVAL_LOAD);
 
 	/* Timer mode */
 	Chip_MRT_SetMode(pMRT, MRT_MODE_REPEAT);
@@ -319,6 +322,7 @@ int main(void) {
 			 sec_5 = get_ticks() / 5000;
 			 int pressure = system.get_pressure();
 
+			 /*
 			Sleep(5);
 			int humidity = temp_humidity_sensor.getHumidity();
 			Sleep(5);
@@ -329,6 +333,19 @@ int main(void) {
 			int temp_sensor_status = temp_humidity_sensor.getStatus();
 			Sleep(5);
 			int co2_sensor_status = co2_sensor.getStatus();
+			*/
+
+			Sleep(5);
+			int humidity = 0;
+			Sleep(5);
+			int co2 = 0;
+			Sleep(5);
+			int temp = 0;
+			Sleep(5);
+			int temp_sensor_status = 0;
+			Sleep(5);
+			int co2_sensor_status = 0;
+
 			monitor.setValues(pressure, co2, humidity, temp);
 
 			statusValues[0] = system.pressure_error();
@@ -443,13 +460,24 @@ void messageArrived(MessageData *data) {
 
 	size_t colon_pos = value.find(":", 0);
 	int reading = 0;
-	if (value.find("pressure") != std::string::npos) {
-		reading = std::stoi(value.substr(colon_pos + 1, std::string::npos));
+	// Check that number input is a valid number and does not contain text
+	std::string number_input = value.substr(colon_pos + 1, std::string::npos);
+	for(char c : number_input){
+		if(!isdigit(c)){
+			printf("Input value is not a valid number\r\n");
+			return;
+		}
+	}
+
+	if (auto_mode && value.find("pressure") != std::string::npos) {
+		reading = std::stoi(number_input);
 		printf("Pressure input: %d\r\n", reading);
-	} else if (value.find("speed") != std::string::npos) {
-		reading = std::stoi(value.substr(colon_pos + 1, std::string::npos));
+	}
+	else if (!auto_mode && value.find("speed") != std::string::npos) {
+		reading = std::stoi(number_input);
 		printf("Speed input: %d\r\n", reading);
-	} else {
+	}
+	else {
 		printf("Value is invalid\r\n");
 		// TODO Set active error.
 		return;
