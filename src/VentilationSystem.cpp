@@ -21,7 +21,8 @@ VentilationSystem::VentilationSystem(
 		target_pressure(_target_pressure),
 		fan_speed(0),
 		error_codes(0),
-		counter(0)
+		counter(0),
+		pressure(0)
 {
 
 }
@@ -63,44 +64,45 @@ void VentilationSystem::adjust(){
 		pressure = (sum + measured_pressure) / pressure_count;
 	}
 
-	// Adjust pressure and check if target pressure was reached in auto mode
-	if(auto_mode && !i2c_error){
-		//int diff = abs(target_pressure - measured_pressure);
+	if(auto_mode){
 		if(pressure == target_pressure){
 			unset_error(ERROR::PRESSURE_NOT_REACHED);
 			counter = 0;
 		}
 		else if(counter >= time_to_reach_target_pressure){
 			set_error(ERROR::PRESSURE_NOT_REACHED);
-			counter = 0;
 		}
 
-		if(target_pressure > 0){
-			float KP = 0.25;
-			float KI = 0.03;
-			float KD = 0.4;
-			//float diff = target_pressure - measured_pressure;
-			float error = target_pressure - pressure;
+		// Adjust pressure
+		if(!i2c_error){
+			//int diff = abs(target_pressure - measured_pressure);
+			if(target_pressure > 0){
+				float KP = 0.25;
+				float KI = 0.03;
+				float KD = 0.4;
+				//float diff = target_pressure - measured_pressure;
+				float error = target_pressure - pressure;
 
-			float integral = last_integral + error * 3;
-			float derivative = (error - last_error) / 3;
-			float output = KP*error + KI*integral + KD*derivative;
-			last_error = error;
-			//printf("Integral: %f, Last integral: %f\n", integral, last_integral);
-			last_integral = integral;
-			fan_speed = output;
+				float integral = last_integral + error * 3;
+				float derivative = (error - last_error) / 3;
+				float output = KP*error + KI*integral + KD*derivative;
+				last_error = error;
+				//printf("Integral: %f, Last integral: %f\n", integral, last_integral);
+				last_integral = integral;
+				fan_speed = output;
 
-			if(fan_speed > 100.0){
-				fan_speed = 100.0;
+				if(fan_speed > 100.0){
+					fan_speed = 100.0;
+				}
+				else if(fan_speed < 0){
+					fan_speed = 0;
+				}
+				fan->setSpeed(fan_speed);
 			}
-			else if(fan_speed < 0){
+			else {
+				fan->setSpeed(0);
 				fan_speed = 0;
 			}
-			fan->setSpeed(fan_speed);
-		}
-		else {
-			fan->setSpeed(0);
-			fan_speed = 0;
 		}
 	}
 	else {
@@ -177,14 +179,14 @@ void VentilationSystem::unset_error(ERROR error){
 }
 
 uint8_t VentilationSystem::pressure_error() const{
-	if(error_codes & PRESSURE_NOT_REACHED){
+	if(error_codes & (1 << PRESSURE_NOT_REACHED)){
 		return 1;
 	}
 	return 0;
 }
 
 uint8_t VentilationSystem::sensor_error()const {
-	if(error_codes & I2C_ERROR){
+	if(error_codes & (1 << I2C_ERROR)){
 		return 1;
 	}
 	return 0;
@@ -192,7 +194,7 @@ uint8_t VentilationSystem::sensor_error()const {
 }
 
 uint8_t VentilationSystem::fan_error() const{
-	if(error_codes & FAN_NOT_SPINNING){
+	if(error_codes & (1 << FAN_NOT_SPINNING)){
 		return 1;
 	}
 	return 0;

@@ -11,6 +11,19 @@
 
 void Sleep(int ms);
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+/**
+ * @brief	Handle interrupt from SysTick timer
+ * @return	Nothing
+ */
+
+uint32_t get_ticks(void);
+#ifdef __cplusplus
+}
+#endif
+
 
 
 

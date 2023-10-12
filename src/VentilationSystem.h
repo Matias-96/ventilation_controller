@@ -45,9 +45,9 @@ private:
 	float fan_speed;
 	int pressure;
 
-	const int time_to_reach_target_pressure = 120000;
+	const uint32_t time_to_reach_target_pressure = 10000;
 	uint8_t error_codes;
-	volatile int counter;
+	volatile uint32_t counter;
 
 	float last_error = 0;
 	float last_integral = 0;

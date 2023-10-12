@@ -39,8 +39,6 @@
 #include "HMP60.h"
 
 #include "MenuItem.h"
-#include "HumTempModbus.h"
-//#include "Co2Modbus.h"
 #include "SimpleMenu.h"
 #include "IntegerEdit.h"
 #include "DecimalEdit.h"
@@ -49,6 +47,8 @@
 
 #include "MonitorEdit.h"
 #include <LogEdit.h>
+#include <mutex>
+#include "Imutex.hpp"
 
 #define SSID	    "SmartIotMQTT"
 #define PASSWORD    "SmartIot"
@@ -61,16 +61,16 @@ static volatile uint32_t systicks = 0;
 static volatile bool t3Fired;
 int mrtch;
 
-VentilationSystem *s;
+VentilationSystem *system_ptr = nullptr;
 Button *upBtn;
 Button *backBtn;
 Button *okBtn;
 Button *downBtn;
 SimpleMenu *menu_ptr;
 
-IntegerEdit *speed_ptr;
-IntegerEdit *pressure_ptr;
-StringEdit *mode_ptr;
+IntegerEdit *menu_speed;
+IntegerEdit *menu_pressure;
+StringEdit *menu_mode;
 
 
 #ifdef __cplusplus
@@ -83,6 +83,7 @@ extern "C" {
 
 void SysTick_Handler(void) {
 	systicks++;
+	if(system_ptr) system_ptr->tick();
 	if (counter > 0)
 		counter--;
 }
@@ -184,28 +185,29 @@ int main(void) {
 	printf("\nBoot\n");
 
 	ModbusMaster fanNode(1);
-	//ModbusMaster co2Node(240);
-	//ModbusMaster humTempNode(241);
-
 	fanNode.begin(9600);
-	//co2Node.begin(9600);
-	//humTempNode.begin(9600);
 
 	ModbusRegister AO1(&fanNode, 0);
 	ModbusRegister DI1(&fanNode, 4, false);
-	//ModbusRegister CO2(&co2Node, 256, false);
-	//ModbusRegister CO2status(&co2Node, 2049, false);
-	//ModbusRegister temp_register(&humTempNode, 257, false);
+	VentilationFan fan(&DI1, &AO1, 0, false);
+
+	GMP252 co2_sensor;
+	HMP60 temp_humidity_sensor;
+	SDP610 pressure_sensor(LPC_I2C0);
+
+	VentilationSystem system(&fan, &pressure_sensor, true, 0);
+	system_ptr = &system;
+
 
 	DigitalIoPin a5(0, 7, DigitalIoPin::pullup, true);
 	DigitalIoPin a4(0, 6, DigitalIoPin::pullup, true);
 	DigitalIoPin a3(0, 5, DigitalIoPin::pullup, true);
 	DigitalIoPin a2(1, 8, DigitalIoPin::pullup, true);
 
-	Button up(&a5);
+	Button up(&a5, true, 1500);
 	Button back(&a4);
 	Button ok(&a3);
-	Button down(&a2);
+	Button down(&a2, true, 1500);
 
 	upBtn = &up;
 	backBtn = &back;
@@ -220,16 +222,9 @@ int main(void) {
 	DigitalIoPin *d7 = new DigitalIoPin(0, 0, DigitalIoPin::output);
 
 	LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
-	VentilationFan fan(&AO1, &AO1, 0, false);
-	SDP610 pressure_sensor(LPC_I2C0);
-	//Co2Modbus co2Probe(&co2Node, 256, 2049);
+	lcd.setCursor(0,0);
 	SimpleMenu menu;
 	menu_ptr = &menu;
-
-	/* connect to mqtt broker, subscribe to a topic,
-	 * send and receive messages regularly every 1 sec */
-
-
 
 	 MQTTClient client;
 	 Network network;
@@ -238,47 +233,51 @@ int main(void) {
 	 MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
 
 
+	 lcd.print("Connecting...");
+	 lcd.setCursor(0,1);
+	 lcd.print(SSID);
+
+
 	 NetworkInit(&network, SSID, PASSWORD);
-	 MQTTClientInit(&client, &network, 5000, sendbuf, sizeof(sendbuf), readbuf,
-	 sizeof(readbuf));
+	 MQTTClientInit(&client, &network, 5000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
 
 	 char *address = (char*) BROKER_IP;
-	 if ((rc = NetworkConnect(&network, address, BROKER_PORT)) != 0)
-	 printf("Return code from network connect is %d\n", rc);
+	 int mqtt_status = 0;
+
+	 rc = NetworkConnect(&network, address, BROKER_PORT);
+	 if (rc != 0)
+		 printf("Return code from network connect is %d\n", rc);
 
 	 connectData.MQTTVersion = 3;
 	 connectData.clientID.cstring = (char*) "esp_test";
 
 	 bool mqtt_connected;
+	 mqtt_status = rc = MQTTConnect(&client, &connectData);
 
-	 if ((rc = MQTTConnect(&client, &connectData)) != 0) {
-	 printf("Return code from MQTT connect is %d\n", rc);
-	 mqtt_connected = false;
+	 if (rc != 0) {
+		 printf("Return code from MQTT connect is %d\n", rc);
+		 mqtt_connected = false;
 	 }
-
 	 else {
-	 printf("MQTT Connected\n");
-	 mqtt_connected = true;
+		 printf("MQTT Connected\n");
+		 mqtt_connected = true;
+		 mqtt_status = rc = MQTTSubscribe(&client, "controller/settings", QOS2,messageArrived);
+		 if (rc != 0)
+			 printf("Return code from MQTT subscribe is %d\n", rc);
 	 }
 
-	 if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2,
-	 messageArrived)) != 0)
-	 printf("Return code from MQTT subscribe is %d\n", rc);
-
-	VentilationSystem system(&fan, &pressure_sensor, true, 0);
-
-	s = &system;
 	uint32_t sec_20 = 0;
 	uint32_t sec_5 = 0;
 	uint32_t sec_3 = 0;
 
+	// Initialize menu
 	std::vector<std::string> modeOptions = { "Auto", "Manual" };
 	StringEdit modeEdit(&lcd, "Mode", modeOptions);
-	mode_ptr = &modeEdit;
+	menu_mode = &modeEdit;
 
-	std::vector<std::string> statusLog = { "Pressure", "Fan", "GMP252", "HMP60", "SDP610" }; // TODO append with relevant codes
+	std::vector<std::string> statusLog = { "Pressure", "Fan", "GMP252", "HMP60", "SDP610", "MQTT" };
 	LogEdit status(&lcd, "Device Status", statusLog);
-	std::vector<int> statusValues = { 0, 0, 0, 0, 0 };
+	std::vector<int> statusValues = { 0, 0, 0, 0, 0, mqtt_status };
 	status.setValues(statusValues);
 
 	IntegerEdit fanSpeed(&lcd, "Set fan speed", 0, 100, 1, "%");
@@ -286,8 +285,8 @@ int main(void) {
 	MonitorEdit monitor(&lcd, "Pa", "Ppm", "RH%", "C");
 	monitor.setValues(100, 600, 30, 23);
 
-	speed_ptr = &fanSpeed;
-	pressure_ptr = &targetPressure;
+	menu_speed = &fanSpeed;
+	menu_pressure = &targetPressure;
 
 	menu.addItem(new MenuItem(&monitor));
 	menu.addItem(new MenuItem(&status));
@@ -296,9 +295,6 @@ int main(void) {
 	menu.addItem(new MenuItem(&targetPressure));
 
 	menu.event(MenuItem::show);
-
-	HMP60 temp_humidity_sensor;
-	GMP252 co2_sensor;
 
 	init_MRT_interupt();
 
@@ -309,11 +305,15 @@ int main(void) {
 
 			if (modeEdit.getValue() == "Manual") {
 				system.set_speed(fanSpeed.getValue());
-				system.set_mode(false);
+				if(system.get_mode() != false){
+					system.set_mode(false);
+				}
 			} else {
 				fanSpeed.setValue(system.get_speed());
 				system.set_target_pressure(targetPressure.getValue());
-				system.set_mode(true);
+				if(system.get_mode() != true){
+					system.set_mode(true);
+				}
 			}
 
 			system.adjust();
@@ -325,8 +325,9 @@ int main(void) {
 			 char payload[150];
 
 			 ++count;
+			 int pressure = system.get_pressure();
 
-			 Sleep(5);
+			Sleep(5);
 			int humidity = temp_humidity_sensor.getHumidity();
 			Sleep(5);
 			int co2 = co2_sensor.get_co2();
@@ -336,17 +337,14 @@ int main(void) {
 			int temp_sensor_status = temp_humidity_sensor.getStatus();
 			Sleep(5);
 			int co2_sensor_status = co2_sensor.getStatus();
-			int pressure = system.get_pressure();
 			monitor.setValues(pressure, co2, humidity, temp);
 
-			//printf("%d %d \n", co2_sensor_status, temp_sensor_status);
-
-			//{ "Pressure", "Fan", "GMP252", "HMP60", "SDP610" };
 			statusValues[0] = system.pressure_error();
 			statusValues[1] = system.fan_error();
 			statusValues[2] = co2_sensor_status;
 			statusValues[3] = temp_sensor_status;
 			statusValues[4] = system.sensor_error();
+			statusValues[5] = mqtt_status;
 			status.setValues(statusValues);
 
 			menu.event(MenuItem::show);
@@ -360,13 +358,14 @@ int main(void) {
 					system.get_mode() ? system.get_target_pressure() : system.get_speed(),
 					pressure,
 					system.get_mode() ? "true" : "false",
-					system.error() ? "true" : "false",
+					system.pressure_error() ? "true" : "false",
 					co2,
 					humidity,
 					temp);
 			 message.payloadlen = strlen(payload);
 
-			 if ((rc = MQTTPublish(&client, "controller/status", &message)) != 0) {
+			 mqtt_status = rc = MQTTPublish(&client, "controller/status", &message);
+			 if (rc != 0) {
 				 printf("Return code from MQTT publish is %d\n", rc);
 				 mqtt_connected = false;
 			 }
@@ -374,21 +373,21 @@ int main(void) {
 
 		 // Try to reconnect every 20 seconds
 		 if (!mqtt_connected && get_ticks() / 20000 != sec_20) {
-		 printf("trying to reconnect to MQTT\n");
-		 sec_20 = get_ticks() / 20000;
-		 //NetworkDisconnect(&network);
-		 // we should re-establish connection!!
-		 if ((rc = MQTTConnect(&client, &connectData)) != 0) {
-		 printf("Return code from MQTT connect is %d\n", rc);
-		 } else {
-		 printf("MQTT Connected\n");
-		 mqtt_connected = true;
-		 if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2,
-		 messageArrived)) != 0)
-		 printf("Return code from MQTT subscribe is %d\n", rc);
-		 }
+			 printf("trying to reconnect to MQTT\n");
+			 sec_20 = get_ticks() / 20000;
+			 //NetworkDisconnect(&network);
+			 // we should re-establish connection!!
+			 if ((rc = MQTTConnect(&client, &connectData)) != 0) {
+				 printf("Return code from MQTT connect is %d\n", rc);
+			 }
+			 else {
+				 printf("MQTT Connected\n");
+				 mqtt_connected = true;
+			 if ((rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived)) != 0)
+				 printf("Return code from MQTT subscribe is %d\n", rc);
+			 }
 
-		 //break;
+			 //break;
 		 }
 
 		 // run MQTT for 100 ms
@@ -405,29 +404,23 @@ int main(void) {
 }
 #endif
 
-#if 1
-
 void messageArrived(MessageData *data) {
-	//printf("Message arrived on topic %.*s: %.*s\n", data->topicName->lenstring.len, data->topicName->lenstring.data,
-	//		data->message->payloadlen, (char *)data->message->payload);
-	std::string input((char*) data->message->payload,
-			data->message->payloadlen);
+	std::string input((char*) data->message->payload, data->message->payloadlen);
 	// Remove unwanted characters from input
 	input.erase(remove(input.begin(), input.end(), ' '), input.end());
 	input.erase(remove(input.begin(), input.end(), '"'), input.end());
 	input.erase(remove(input.begin(), input.end(), '{'), input.end());
 	input.erase(remove(input.begin(), input.end(), '}'), input.end());
 
-	size_t separator_position = input.find(",");
-	if (separator_position == std::string::npos) {
+	size_t separator_pos = input.find(",");
+	if (separator_pos == std::string::npos) {
 		printf("Invalid MQTT message\n");
 		// Invalid msg
 		// TODO Set active error.
 		return;
 	}
-	std::string mode = input.substr(0, separator_position);
-	std::string value = input.substr(separator_position + 1,
-			input.length() - separator_position - 1);
+	std::string mode = input.substr(0, separator_pos);
+	std::string value = input.substr(separator_pos + 1, input.length() - separator_pos - 1);
 	bool auto_mode = false;
 
 	if (mode.find("auto") == 0) {
@@ -462,216 +455,19 @@ void messageArrived(MessageData *data) {
 		return;
 	}
 
-	s->set_mode(auto_mode);
-
+	Imutex guard;
+	std::lock_guard<Imutex> lock(guard);
+	system_ptr->set_mode(auto_mode);
 	if (auto_mode) {
-		s->set_target_pressure(reading);
-		mode_ptr->setValue(std::string("Auto"));
-		pressure_ptr->setValue(reading);
+		system_ptr->set_target_pressure(reading);
+		menu_mode->setValue(std::string("Auto"));
+		menu_pressure->setValue(reading);
 	} else {
-		s->set_speed(reading);
-		speed_ptr->setValue(reading);
-		mode_ptr->setValue(std::string("Manual"));
+		system_ptr->set_speed(reading);
+		menu_speed->setValue(reading);
+		menu_mode->setValue(std::string("Manual"));
 	}
 	menu_ptr->event(MenuItem::show);
 
 }
 
-void mqttTest() {
-	/* connect to mqtt broker, subscribe to a topic, send and receive messages regularly every 1 sec */
-	MQTTClient client;
-	Network network;
-	unsigned char sendbuf[256], readbuf[2556];
-	int rc = 0, count = 0;
-	MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
-
-	NetworkInit(&network, SSID, PASSWORD);
-	MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf,
-			sizeof(readbuf));
-
-	char *address = (char*) BROKER_IP;
-	if ((rc = NetworkConnect(&network, address, BROKER_PORT)) != 0)
-		printf("Return code from network connect is %d\n", rc);
-
-	connectData.MQTTVersion = 3;
-	connectData.clientID.cstring = (char*) "esp_test";
-
-	if ((rc = MQTTConnect(&client, &connectData)) != 0)
-		printf("Return code from MQTT connect is %d\n", rc);
-	else
-		printf("MQTT Connected\n");
-
-	if ((rc = MQTTSubscribe(&client, "test/sample", QOS2, messageArrived)) != 0)
-		printf("Return code from MQTT subscribe is %d\n", rc);
-
-	uint32_t sec = 0;
-	while (true) {
-		// send one message per second
-		if (get_ticks() / 1000 != sec) {
-			MQTTMessage message;
-			char payload[30];
-
-			sec = get_ticks() / 1000;
-			++count;
-
-			message.qos = QOS1;
-			message.retained = 0;
-			message.payload = payload;
-			sprintf(payload, "message number %d", count);
-			message.payloadlen = strlen(payload);
-
-			if ((rc = MQTTPublish(&client, "controller/status", &message)) != 0)
-				printf("Return code from MQTT publish is %d\n", rc);
-		}
-
-		if (rc != 0) {
-			NetworkDisconnect(&network);
-			// we should re-establish connection!!
-			break;
-		}
-
-		// run MQTT for 100 ms
-		if ((rc = MQTTYield(&client, 100)) != 0)
-			printf("Return code from yield is %d\n", rc);
-	}
-
-	printf("MQTT connection closed!\n");
-
-}
-#endif
-
-#if 0   // example that uses modbus library directly
-void printRegister(ModbusMaster& node, uint16_t reg)
-{
-	uint8_t result;
-	// slave: read 16-bit registers starting at reg to RX buffer
-	result = node.readHoldingRegisters(reg, 1);
-
-	// do something with data if read is successful
-	if (result == node.ku8MBSuccess)
-	{
-		printf("R%d=%04X\n", reg, node.getResponseBuffer(0));
-	}
-	else {
-		printf("R%d=???\n", reg);
-	}
-}
-
-bool setFrequency(ModbusMaster& node, uint16_t freq)
-{
-	uint8_t result;
-	int ctr;
-	bool atSetpoint;
-	const int delay = 500;
-
-	node.writeSingleRegister(1, freq); // set motor frequency
-
-	printf("Set freq = %d\n", freq/40); // for debugging
-
-	// wait until we reach set point or timeout occurs
-	ctr = 0;
-	atSetpoint = false;
-	do {
-		Sleep(delay);
-		// read status word
-		result = node.readHoldingRegisters(3, 1);
-		// check if we are at setpoint
-		if (result == node.ku8MBSuccess) {
-			if(node.getResponseBuffer(0) & 0x0100) atSetpoint = true;
-		}
-		ctr++;
-	} while(ctr < 20 && !atSetpoint);
-
-	printf("Elapsed: %d\n", ctr * delay); // for debugging
-
-	return atSetpoint;
-}
-
-
-void abbModbusTest()
-{
-	ModbusMaster node(2); // Create modbus object that connects to slave id 2
-	node.begin(9600); // set transmission rate - other parameters are set inside the object and can't be changed here
-
-	printRegister(node, 3); // for debugging
-
-	node.writeSingleRegister(0, 0x0406); // prepare for starting
-
-	printRegister(node, 3); // for debugging
-
-	Sleep(1000); // give converter some time to set up
-	// note: we should have a startup state machine that check converter status and acts per current status
-	//       but we take the easy way out and just wait a while and hope that everything goes well
-
-	printRegister(node, 3); // for debugging
-
-	node.writeSingleRegister(0, 0x047F); // set drive to start mode
-
-	printRegister(node, 3); // for debugging
-
-	Sleep(1000); // give converter some time to set up
-	// note: we should have a startup state machine that check converter status and acts per current status
-	//       but we take the easy way out and just wait a while and hope that everything goes well
-
-	printRegister(node, 3); // for debugging
-
-	int i = 0;
-	int j = 0;
-	const uint16_t fa[20] = { 1000, 2000, 3000, 3500, 4000, 5000, 7000, 8000, 10000, 15000, 20000, 9000, 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000 };
-
-	while (1) {
-		uint8_t result;
-
-		// slave: read (2) 16-bit registers starting at register 102 to RX buffer
-		j = 0;
-		do {
-			result = node.readHoldingRegisters(102, 2);
-			j++;
-		} while(j < 3 && result != node.ku8MBSuccess);
-		// note: sometimes we don't succeed on first read so we try up to threee times
-		// if read is successful print frequency and current (scaled values)
-		if (result == node.ku8MBSuccess) {
-			printf("F=%4d, I=%4d  (ctr=%d)\n", node.getResponseBuffer(0), node.getResponseBuffer(1),j);
-		}
-		else {
-			printf("ctr=%d\n",j);
-		}
-
-		Sleep(3000);
-		i++;
-		if(i >= 20) {
-			i=0;
-		}
-		// frequency is scaled:
-		// 20000 = 50 Hz, 0 = 0 Hz, linear scale 400 units/Hz
-		setFrequency(node, fa[i]);
-	}
-}
-#endif
-
-#if 0
-void produalModbusTest() {
-	ModbusMaster node(1); // Create modbus object that connects to slave id 1
-	node.begin(9600); // set transmission rate - other parameters are set inside the object and can't be changed here
-
-	ModbusRegister AO1(&node, 0);
-	ModbusRegister DI1(&node, 4, false);
-
-	const uint16_t fa[20] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5,
-			4, 3, 2, 1 };
-
-	while (1) {
-
-		for (int i = 0; i < 20; ++i) {
-			printf("DI1=%4d\n", DI1.read());
-			AO1.write(fa[i] * 100);
-			// just print the value without checking if we got a -1
-			printf("AO1=%4d\n", (int) fa[i] * 100);
-
-			Sleep(5000);
-			printf("DI1=%4d\n", DI1.read());
-			Sleep(5000);
-		}
-	}
-}
-#endif

@@ -9,15 +9,21 @@
 #define BUTTON_H_
 
 #include "DigitalIoPin.h"
+#include <cstdint>
+#include "socket_mqtt.h"
 
 class Button{
 public:
-	Button(DigitalIoPin* _btn);
+	Button(DigitalIoPin* _btn, bool _long_press = false, uint32_t _delay = 1000);
 	bool read();
 
 private:
 	DigitalIoPin *btn;
-	bool last_state;
+	bool btn_was_pressed;
+	bool long_press;
+	uint32_t delay;
+	uint32_t start_time;
+
 };
 
 
