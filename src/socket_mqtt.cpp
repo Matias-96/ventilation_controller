@@ -322,7 +322,7 @@ int main(void) {
 			 sec_5 = get_ticks() / 5000;
 			 int pressure = system.get_pressure();
 
-			 /*
+
 			Sleep(5);
 			int humidity = temp_humidity_sensor.getHumidity();
 			Sleep(5);
@@ -333,18 +333,6 @@ int main(void) {
 			int temp_sensor_status = temp_humidity_sensor.getStatus();
 			Sleep(5);
 			int co2_sensor_status = co2_sensor.getStatus();
-			*/
-
-			Sleep(5);
-			int humidity = 0;
-			Sleep(5);
-			int co2 = 0;
-			Sleep(5);
-			int temp = 0;
-			Sleep(5);
-			int temp_sensor_status = 0;
-			Sleep(5);
-			int co2_sensor_status = 0;
 
 			monitor.setValues(pressure, co2, humidity, temp);
 
