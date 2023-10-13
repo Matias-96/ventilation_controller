@@ -50,12 +50,8 @@
 #include <mutex>
 #include "Imutex.hpp"
 
-//#define SSID	    "SmartIotMQTT"
-//#define PASSWORD    "SmartIot"
-//#define BROKER_IP   "192.168.1.106"
-
-#define SSID	    "TP_Link_20E6"
-#define PASSWORD    "Oranssikesakyy105"
+#define SSID	    "SmartIotMQTT"
+#define PASSWORD    "SmartIot"
 #define BROKER_IP   "192.168.1.101"
 #define BROKER_PORT  1883
 
@@ -66,15 +62,15 @@ static volatile bool t3Fired;
 int mrtch;
 
 VentilationSystem *system_ptr = nullptr;
-Button *upBtn;
-Button *backBtn;
-Button *okBtn;
-Button *downBtn;
-SimpleMenu *menu_ptr;
+Button *upBtn = nullptr;
+Button *backBtn = nullptr;
+Button *okBtn = nullptr;
+Button *downBtn = nullptr;
+SimpleMenu *menu_ptr = nullptr;
 
-IntegerEdit *menu_speed;
-IntegerEdit *menu_pressure;
-StringEdit *menu_mode;
+IntegerEdit *menu_speed = nullptr;
+IntegerEdit *menu_pressure = nullptr;
+StringEdit *menu_mode = nullptr;
 
 
 #ifdef __cplusplus
@@ -473,17 +469,17 @@ void messageArrived(MessageData *data) {
 
 	Imutex guard;
 	std::lock_guard<Imutex> lock(guard);
-	system_ptr->set_mode(auto_mode);
+	if(system_ptr) system_ptr->set_mode(auto_mode);
 	if (auto_mode) {
-		system_ptr->set_target_pressure(reading);
-		menu_mode->setValue(std::string("Auto"));
-		menu_pressure->setValue(reading);
+		if(system_ptr) system_ptr->set_target_pressure(reading);
+		if(menu_mode) menu_mode->setValue(std::string("Auto"));
+		if(menu_pressure) menu_pressure->setValue(reading);
 	} else {
-		system_ptr->set_speed(reading);
-		menu_speed->setValue(reading);
-		menu_mode->setValue(std::string("Manual"));
+		if(system_ptr) system_ptr->set_speed(reading);
+		if(menu_speed) menu_speed->setValue(reading);
+		if(menu_mode) menu_mode->setValue(std::string("Manual"));
 	}
-	menu_ptr->event(MenuItem::show);
+	if(menu_ptr) menu_ptr->event(MenuItem::show);
 
 }
 
