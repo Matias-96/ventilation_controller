@@ -5,8 +5,10 @@
  *      Author: jpj1
  */
 
-#ifndef SOCKET_MQTT_H_
-#define SOCKET_MQTT_H_
+#ifndef MAIN_H_
+#define MAIN_H_
+
+#include <cstdint>
 
 
 void Sleep(int ms);
@@ -27,4 +29,4 @@ uint32_t get_ticks(void);
 
 
 
-#endif /* SOCKET_MQTT_H_ */
+#endif /* MAIN_H_ */

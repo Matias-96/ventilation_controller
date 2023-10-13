@@ -221,17 +221,16 @@ int main(void) {
 	SimpleMenu menu;
 	menu_ptr = &menu;
 
+	/*Connect to network and MQTT broker */
 	 MQTTClient client;
 	 Network network;
 	 unsigned char sendbuf[256], readbuf[2556];
 	 int rc = 0, count = 0;
 	 MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
 
-
 	 lcd.print("Connecting...");
 	 lcd.setCursor(0,1);
 	 lcd.print(SSID);
-
 
 	 NetworkInit(&network, SSID, PASSWORD);
 	 MQTTClientInit(&client, &network, 5000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
@@ -291,33 +290,34 @@ int main(void) {
 
 	menu.event(MenuItem::show);
 
+	// Start MRT
 	init_MRT_interupt();
 
 	while (true) {
 
+		// Read new values from menu and adjust system every 3 seconds
 		if (get_ticks() / 3000 != sec_3) {
 			sec_3 = get_ticks() / 3000;
 
 			if (modeEdit.getValue() == "Manual") {
 				system.set_speed(fanSpeed.getValue());
-				if(system.get_mode() != false){
+				if(system.get_mode() != false){ // Set mode again only if its different from current mode
 					system.set_mode(false);
 				}
 			} else {
 				fanSpeed.setValue(system.get_speed());
 				system.set_target_pressure(targetPressure.getValue());
-				if(system.get_mode() != true){
+				if(system.get_mode() != true){ // Set mode again only if its different from current mode
 					system.set_mode(true);
 				}
 			}
-
 			system.adjust();
 		}
 
-		 if (get_ticks() / 5000 != sec_5) {
-			 sec_5 = get_ticks() / 5000;
-			 int pressure = system.get_pressure();
-
+		// Read sensors and update menu every 5 seconds. Send updates to MQTT broker if its connected
+		if (get_ticks() / 5000 != sec_5) {
+			sec_5 = get_ticks() / 5000;
+			int pressure = system.get_pressure();
 
 			Sleep(5);
 			int humidity = temp_humidity_sensor.getHumidity();
@@ -341,14 +341,15 @@ int main(void) {
 			status.setValues(statusValues);
 
 			menu.event(MenuItem::show);
-			if(mqtt_connected){
-				 MQTTMessage message;
-				 char payload[150];
-				 ++count;
 
-				 message.qos = QOS1;
-				 message.retained = 0;
-				 message.payload = payload;
+			if(mqtt_connected){
+				MQTTMessage message;
+				char payload[150];
+				++count;
+
+				message.qos = QOS1;
+				message.retained = 0;
+				message.payload = payload;
 				sprintf(payload, "{\"nr\":%4d, \"speed\":%3d, \"setpoint\":%3d, \"pressure\":%3d, \"auto\":%5s, \"error\":%5s, \"co2\":%d, \"rh\":%d, \"temp\":%d }",
 						count,
 						system.get_speed(),
@@ -367,35 +368,34 @@ int main(void) {
 					 mqtt_connected = false;
 				 }
 			}
-		 }
+		}
 
-		 // Try to reconnect every 60 seconds if connection to broker breaks
-		 if (!mqtt_connected && get_ticks() / 60000 != sec_60) {
-			 printf("trying to reconnect to MQTT\n");
-			 sec_60 = get_ticks() / 60000;
-			 mqtt_status = rc = MQTTConnect(&client, &connectData);
-			 if (rc != 0) {
-				 printf("Return code from MQTT connect is %d\n", rc);
-			 }
-			 else {
-				 printf("MQTT Connected\n");
-				 mqtt_connected = true;
-				 mqtt_status = rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived);
-				 if (rc != 0){
-					 mqtt_connected = false;
-					 printf("Return code from MQTT subscribe is %d\n", rc);
-				 }
-			 }
-		 }
+		// Try to reconnect to MQTT broker every 60 seconds if connection breaks
+		if (!mqtt_connected && get_ticks() / 60000 != sec_60) {
+			printf("trying to reconnect to MQTT\n");
+			sec_60 = get_ticks() / 60000;
+			mqtt_status = rc = MQTTConnect(&client, &connectData);
+			if (rc != 0) {
+				printf("Return code from MQTT connect is %d\n", rc);
+			}
+			else {
+				printf("MQTT Connected\n");
+				mqtt_connected = true;
+				mqtt_status = rc = MQTTSubscribe(&client, "controller/settings", QOS2, messageArrived);
+				if (rc != 0){
+					mqtt_connected = false;
+					printf("Return code from MQTT subscribe is %d\n", rc);
+				}
+			}
+		}
 
-		 // run MQTT for 100 ms
-		 if(mqtt_connected){
-			 mqtt_status = rc = MQTTYield(&client, 100);
-			 if (rc != 0){
-				 printf("Return code from yield is %d\n", rc);
-			 }
-		 }
-
+		// run MQTT for 100 ms
+		if(mqtt_connected){
+			mqtt_status = rc = MQTTYield(&client, 100);
+			if (rc != 0){
+				printf("Return code from yield is %d\n", rc);
+			}
+		}
 	}
 
 	while (1) {}
@@ -416,8 +416,6 @@ void messageArrived(MessageData *data) {
 	size_t separator_pos = input.find(",");
 	if (separator_pos == std::string::npos) {
 		printf("Invalid MQTT message\n");
-		// Invalid msg
-		// TODO Set active error.
 		return;
 	}
 	std::string mode = input.substr(0, separator_pos);
@@ -433,12 +431,11 @@ void messageArrived(MessageData *data) {
 			printf("Mode: manual\n");
 		} else {
 			printf("Value is invalid\r\n");
-			// TODO Set active error.
 			return;
 		}
-	} else {
+	}
+	else {
 		printf("Invalid input\r\n");
-		// TODO Set active error.
 		return;
 	}
 
@@ -463,10 +460,10 @@ void messageArrived(MessageData *data) {
 	}
 	else {
 		printf("Value is invalid\r\n");
-		// TODO Set active error.
 		return;
 	}
 
+	// Set new values to menu and system
 	Imutex guard;
 	std::lock_guard<Imutex> lock(guard);
 	if(system_ptr) system_ptr->set_mode(auto_mode);

@@ -25,7 +25,7 @@ bool Button::read(){
 		if(state){
 			start_time = get_ticks();
 		}
-		// Return true if button is still pressed and delay passed
+		// Return true if button is still pressed and delay has passed
 		else if(btn_pressed && (get_ticks() - start_time) >= delay){
 			state =  true;
 		}

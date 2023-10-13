@@ -7,8 +7,8 @@
 
 
 
+#include "main.h"
 #include "GMP252.h"
-#include "socket_mqtt.h"
 
 GMP252::GMP252(uint8_t nodeAddress)
     : co2Node(nodeAddress),

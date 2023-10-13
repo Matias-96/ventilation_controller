@@ -19,12 +19,12 @@ Imutex::~Imutex()
 }
 void Imutex::lock()
 {
- enable = (__get_PRIMASK() & 1) == 0;
- __disable_irq();
+	 enable = (__get_PRIMASK() & 1) == 0;
+	 __disable_irq();
 }
 void Imutex::unlock()
 {
- if(enable) __enable_irq();
+	if(enable) __enable_irq();
 }
 
 

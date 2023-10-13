@@ -31,7 +31,7 @@ void VentilationSystem::tick(){
 }
 
 void VentilationSystem::adjust(){
-	// In one of these conditions fan is supposed to spin
+	// In either of these conditions fan is supposed to spin
 	if(( auto_mode && target_pressure > 0) || fan_speed > 0){
 		int new_fan_value = fan->readFan();
 		if(previous_fan_value == 0 && new_fan_value == 0)
@@ -58,7 +58,7 @@ void VentilationSystem::adjust(){
 		int sum = 0;
 		// Calculate running average of previous pressure measurements
 		for(int i = 0; i < pressure_count - 1; i++){
-			prev_pressure_measurements[i] = prev_pressure_measurements[i+1];
+			prev_pressure_measurements[i] = prev_pressure_measurements[i+1]; // Shift values
 			sum += prev_pressure_measurements[i];
 		}
 		prev_pressure_measurements[pressure_count - 1] = measured_pressure;
@@ -139,7 +139,7 @@ void VentilationSystem::set_target_pressure(int new_pressure){
 		new_pressure = MAX_PRESSURE;
 	}
 
-	// If adjusting is started from zero, give a "kick" to system so it starts to adjust pressure faster
+	// If system is stopped, give a "kick" to system so it starts to adjust fan faster
 	if(auto_mode && target_pressure == 0){
 		last_integral = 300;
 	}

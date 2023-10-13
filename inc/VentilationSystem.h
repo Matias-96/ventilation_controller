@@ -12,6 +12,8 @@
 #include "SDP610.h"
 #include <cstdint>
 
+/*Class controls and uses the pressure sensor and fan.
+ * It reads pressure and adjusts fan's speed in automatic mode with PID control*/
 
 class VentilationSystem{
 public:

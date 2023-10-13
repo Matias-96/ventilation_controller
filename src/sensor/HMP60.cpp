@@ -1,6 +1,6 @@
 
-#include <HMP60.h>
-#include "socket_mqtt.h"
+#include "HMP60.h"
+#include "main.h"
 
 HMP60::HMP60(uint8_t nodeAddress)
     : humTempNode(nodeAddress),

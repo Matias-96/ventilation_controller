@@ -6,7 +6,6 @@
  */
 
 #include "SDP610.h"
-//#include "socket_mqtt.h"
 #include <cstdint>
 
 uint8_t SDP610::TRIGGER_MEASUREMENT = 0xF1;
@@ -21,6 +20,7 @@ SDP610::SDP610(
 		int altitude,
 		uint8_t _address) :
 		i2c(i2c_peripheral), address(_address){
+
 	if(i2c != nullptr){
 		Chip_IOCON_PinMuxSet(LPC_IOCON, _scl_port, _scl_pin, IOCON_DIGMODE_EN | I2C_MODE);
 		Chip_IOCON_PinMuxSet(LPC_IOCON, _scd_port, _scd_pin, IOCON_DIGMODE_EN | I2C_MODE);
@@ -38,8 +38,6 @@ SDP610::SDP610(
 
 		/* Enable Master Mode */
 		Chip_I2CM_Enable(i2c);
-		// Sensor needs 50ms of warm up time before its first measurement is reliable.
-		//Sleep(50);
 	}
 	set_altitude(altitude);
 }
@@ -76,8 +74,6 @@ int SDP610::read(int &i2c_error) {
 			sensor_output |= 0xFFFF0000;
 		}
 		pressure = (sensor_output / SCALE_FACTOR) * altitude_correction_factor;
-		//printf("MSB: %3d, LSB: %3d, Sensor output: %5d, Pressure: %3d\n",
-				//read_data[0], read_data[1], sensor_output, pressure);
 	}
 
 	i2c_error = i2cmXferRec.status;
@@ -94,7 +90,6 @@ void SDP610::soft_reset(int &i2c_error){
 	// After reset, do one dummy read because sensor's first
 	//measurement after reset is not valid
 	if(i2cmXferRec.status == I2CM_STATUS_OK){
-		//Sleep(10);
 		read(i2c_error);
 	}
 }

@@ -31,12 +31,9 @@ private:
 	I2CM_XFER_T i2cmXferRec;
 	uint8_t address;
 	float altitude_correction_factor;
-	/* I2C clock is set to 1.8MHz */
-	static const int I2C_CLK_DIVIDER = 40;
-	/* 100KHz I2C bit-rate */
-	static const int I2C_BITRATE = 100000;
-	/* Standard I2C mode */
-	static const int I2C_MODE = 0;
+	static const int I2C_CLK_DIVIDER = 40; 	/* I2C clock is set to 1.8MHz */
+	static const int I2C_BITRATE = 100000; 	/* 100KHz I2C bit-rate */
+	static const int I2C_MODE = 0; 			/* Standard I2C mode */
 	static const int SCALE_FACTOR = 240;
 	void SetupXferRecAndExecute(uint8_t *txBuffPtr,
 							    uint16_t txSize,
